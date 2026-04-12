@@ -25,9 +25,16 @@ def create_plot(days=7, location=None):
     if not location:
         location = df['Location'].iloc[-1]
 
-    # Filter data for the last N days and specified location
+    # Filter data for the last N days
     cutoff_date = datetime.now() - timedelta(days=days)
-    df = df[(df['Timestamp'] >= cutoff_date) & (df['Location'] == location)]
+    df = df[df['Timestamp'] >= cutoff_date]
+
+    # Filter by location unless "all" is specified
+    if location.lower() != "all":
+        df = df[df['Location'] == location]
+        title_location = location
+    else:
+        title_location = "All Locations"
 
     if df.empty:
         return None, f"No data found for the last {days} days at location: {location}."
@@ -37,12 +44,17 @@ def create_plot(days=7, location=None):
         plt.figure(figsize=(12, 6))
         ax = plt.gca()
 
-        # Plot for each Room/Zone combination in the specified location
-        for label, group in df.groupby(['Room', 'Zone']):
-            # label is (Room, Zone)
-            room_name = label[0]
-            zone_name = label[1]
-            legend_label = f"{room_name} ({zone_name})"
+        # Plot for each Location/Room/Zone combination
+        for label, group in df.groupby(['Location', 'Room', 'Zone']):
+            # label is (Location, Room, Zone)
+            loc_name = label[0]
+            room_name = label[1]
+            zone_name = label[2]
+            
+            if title_location == "All Locations":
+                legend_label = f"{loc_name} - {room_name}"
+            else:
+                legend_label = f"{room_name} ({zone_name})"
             
             plt.plot(group['Timestamp'], group['Temperature'], label=f"{legend_label} (Actual)", marker='o', markersize=2)
             
@@ -55,7 +67,7 @@ def create_plot(days=7, location=None):
                              color='red', alpha=0.1, transform=ax.get_xaxis_transform(), 
                              label=f"{legend_label} (Heating Active)")
 
-        plt.title(f'Thermostat Temperature - {location} (Last {days} Days)')
+        plt.title(f'Thermostat Temperature - {title_location} (Last {days} Days)')
         plt.xlabel('Time')
         plt.ylabel('Temperature (°C)')
         

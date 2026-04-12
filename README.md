@@ -37,7 +37,7 @@ docker compose up -d --build
 ## 🤖 Discord Bot Commands
 Invite the bot to your server and use the following commands:
 - `!temp`: Fetches the current temperature and logs it.
-- `!plot <days>`: Sends a graph for the last N days (e.g., `!plot 1` for the last 24 hours).
+- `!plot <days> [location]`: Sends a graph for the last N days. Use `all` as the location to see all apartments on one graph (e.g., `!plot 7 all`).
 - `!data`: Sends the `temp_log.csv` file as an attachment.
 - `!ping`: Health check.
 
