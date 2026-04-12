@@ -1,0 +1,6 @@
+.env
+temp_log.csv
+temp_plot.png
+venv/
+__pycache__/
+*.pyc

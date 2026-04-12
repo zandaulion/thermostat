@@ -1,0 +1,31 @@
+services:
+  thermostat-logger:
+    build: .
+    container_name: it500-logger
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    environment:
+      - TZ=Europe/Bucharest
+      - LOG_FILE=/app/data/temp_log.csv
+      - OUTPUT_PLOT=/app/data/temp_plot.png
+      - INTERVAL_SECONDS=600
+    command: python log_temp.py --loop
+
+  discord-bot:
+    build: .
+    container_name: it500-discord-bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    environment:
+      - TZ=Europe/Bucharest
+      - LOG_FILE=/app/data/temp_log.csv
+      - OUTPUT_PLOT=/app/data/temp_plot.png
+    command: python discord_bot.py
