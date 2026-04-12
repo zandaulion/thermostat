@@ -25,8 +25,8 @@ async def on_ready():
     print('------')
 
 @bot.command()
-async def temp(ctx):
-    """Fetch current temperature and log it."""
+async def temp(ctx, location: str = None):
+    """Fetch current temperature and log it. Optional location filter."""
     await ctx.send("Fetching current temperature...")
     results, error = await fetch_and_log_data()
     
@@ -39,17 +39,32 @@ async def temp(ctx):
         return
 
     msg = "**Current Temperature:**\n"
+    found = False
     for row in results:
-        msg += f"🏠 {row[1]} ({row[2]}): {row[3]}°C (Setpoint: {row[4]}°C) - Status: {row[5]}\n"
+        # row: [timestamp, location, room, device_name, zone, temp, humidity, setpoint, status]
+        if location and location.lower() not in row[1].lower():
+            continue
+            
+        found = True
+        line = f"🏠 **{row[1]}** - {row[2]} ({row[4]}): {row[5]}°C"
+        if row[6]: # Humidity
+            line += f" (💧 {row[6]}%)"
+        if row[7]: # Setpoint
+            line += f" [Setpoint: {row[7]}°C]"
+        line += f" - Status: {row[8]}\n"
+        msg += line
     
-    await ctx.send(msg)
+    if not found and location:
+        await ctx.send(f"❓ No data found for location: {location}")
+    else:
+        await ctx.send(msg)
 
 @bot.command()
-async def plot(ctx, days: int = 7):
-    """Generate and send the temperature plot for N days."""
+async def plot(ctx, days: int = 7, *, location: str = None):
+    """Generate and send the temperature plot for N days. Optional location filter."""
     await ctx.send(f"Generating plot for the last {days} days...")
-    # Ensure plot is generated in a thread if it's heavy, but for now direct call
-    path, error = create_plot(days=days)
+    
+    path, error = create_plot(days=days, location=location)
     
     if error:
         await ctx.send(f"❌ Error: {error}")

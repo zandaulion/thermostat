@@ -5,3 +5,4 @@ pandas
 matplotlib
 git+https://github.com/RichyA/pyit500.git
 discord.py
+tinytuya

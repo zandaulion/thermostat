@@ -1,0 +1,27 @@
+{
+  "Salus": {
+    "device_id": "STA10009067",
+    "location": "Snagov",
+    "room": "Living Room"
+  },
+  "Tuya": [
+    {
+      "id": "bfecf8ab6fe1d1ba79til3",
+      "location": "Basarabia",
+      "room": "Living Room",
+      "name": "SRW-TH01"
+    },
+    {
+      "id": "bfa1c0253995d81c103cxu",
+      "location": "Mangalia",
+      "room": "Living Room",
+      "name": "WiFi T&H Sensor"
+    },
+    {
+      "id": "bf205e09e2fba9d0e1wb8t",
+      "location": "Home",
+      "room": "Living Room",
+      "name": "HeatingThermostat"
+    }
+  ]
+}
