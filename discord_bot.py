@@ -60,9 +60,18 @@ async def temp(ctx, location: str = None):
         await ctx.send(msg)
 
 @bot.command()
-async def plot(ctx, days: int = 7, *, location: str = None):
-    """Generate and send the temperature plot for N days. Optional location filter."""
-    await ctx.send(f"Generating plot for the last {days} days...")
+async def plot(ctx, *args):
+    """Generate and send the temperature plot. Usage: !plot [days] [location] or !plot [location] [days]"""
+    days = 7
+    location = None
+    
+    for arg in args:
+        try:
+            days = int(arg)
+        except ValueError:
+            location = arg
+
+    await ctx.send(f"Generating plot for {location if location else 'default location'} over the last {days} days...")
     
     path, error = create_plot(days=days, location=location)
     

@@ -21,23 +21,26 @@ def create_plot(days=7, location=None):
     if df.empty:
         return None, "CSV is empty."
 
-    # If no location is provided, pick the first one available
-    if not location:
-        location = df['Location'].iloc[-1]
-
     # Filter data for the last N days
     cutoff_date = datetime.now() - timedelta(days=days)
     df = df[df['Timestamp'] >= cutoff_date]
 
+    if df.empty:
+        return None, f"No data found for the last {days} days."
+
+    # If no location is provided, pick the last one recorded
+    if not location:
+        location = df['Location'].iloc[-1]
+
     # Filter by location unless "all" is specified
-    if location.lower() != "all":
-        df = df[df['Location'] == location]
-        title_location = location
+    target_location = location.strip().lower()
+    if target_location != "all":
+        df = df[df['Location'].str.lower() == target_location]
+        if df.empty:
+            return None, f"No data found for location: {location}"
+        title_location = df['Location'].iloc[0] # Use proper casing from data
     else:
         title_location = "All Locations"
-
-    if df.empty:
-        return None, f"No data found for the last {days} days at location: {location}."
 
     # Create the plot
     try:
@@ -51,14 +54,14 @@ def create_plot(days=7, location=None):
             room_name = label[1]
             zone_name = label[2]
             
-            if title_location == "All Locations":
+            if target_location == "all":
                 legend_label = f"{loc_name} - {room_name}"
             else:
                 legend_label = f"{room_name} ({zone_name})"
             
             plt.plot(group['Timestamp'], group['Temperature'], label=f"{legend_label} (Actual)", marker='o', markersize=2)
             
-            # Only plot setpoint if it's not empty (Salus has it, Tuya sensors won't)
+            # Only plot setpoint if it's not empty
             if not group['Setpoint'].isnull().all() and (group['Setpoint'] != "").all():
                 plt.plot(group['Timestamp'], group['Setpoint'], label=f"{legend_label} (Setpoint)", linestyle='--', alpha=0.7)
             
@@ -90,19 +93,25 @@ if __name__ == "__main__":
     days = 7
     location = None
     
-    # Simple argument parsing
-    # Usage: python plot_temp.py [days] [location]
     if len(sys.argv) > 1:
         try:
             days = int(sys.argv[1])
         except ValueError:
-            print(f"Invalid days argument: {sys.argv[1]}. Using default of 7.")
+            # Maybe the first argument is the location?
+            location = sys.argv[1]
+            days = 7
     
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 2 and not location:
         location = " ".join(sys.argv[2:])
+    elif len(sys.argv) > 2:
+        # We already have location, so maybe second arg is days?
+        try:
+            days = int(sys.argv[2])
+        except ValueError:
+            pass
 
     path, error = create_plot(days=days, location=location)
     if error:
-        print(error)
+        print(f"Error: {error}")
     else:
-        print(f"Plot saved to {path} (Location: {location}, Range: last {days} days)")
+        print(f"Plot saved to {path} (Range: last {days} days)")
