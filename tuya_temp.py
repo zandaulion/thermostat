@@ -81,6 +81,17 @@ async def fetch_tuya_data_all():
                 setpoint = cached.get("setpoint")
         
         if temp is not None:
+            # Infer heating status for thermostats (devices with a setpoint)
+            status_val = mode
+            if mode == "Online" and setpoint != "":
+                try:
+                    if float(temp) < float(setpoint):
+                        status_val = "On"
+                    else:
+                        status_val = "Off"
+                except (ValueError, TypeError):
+                    pass
+
             results.append([
                 timestamp,
                 location,
@@ -90,7 +101,7 @@ async def fetch_tuya_data_all():
                 temp,
                 hum if hum is not None else "",
                 setpoint,
-                mode
+                status_val
             ])
 
     save_cache(cache)
