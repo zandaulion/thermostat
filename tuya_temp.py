@@ -53,6 +53,7 @@ async def fetch_tuya_data_all():
         temp = None
         hum = None
         setpoint = ""
+        power_on = True
         mode = "Offline (Last Known)"
         
         if status.get('success') and 'result' in status:
@@ -68,10 +69,18 @@ async def fetch_tuya_data_all():
                     hum = val
                 elif code == 'temp_set':
                     setpoint = val / 10.0
+                elif code == 'switch':
+                    power_on = val
             
             # Update cache if we got new data
             if temp is not None:
-                cache[dev_id] = {"temp": temp, "hum": hum, "setpoint": setpoint, "timestamp": timestamp}
+                cache[dev_id] = {
+                    "temp": temp, 
+                    "hum": hum, 
+                    "setpoint": setpoint, 
+                    "power_on": power_on,
+                    "timestamp": timestamp
+                }
         else:
             # Fetch from cache if available
             cached = cache.get(dev_id)
@@ -79,18 +88,23 @@ async def fetch_tuya_data_all():
                 temp = cached.get("temp")
                 hum = cached.get("hum")
                 setpoint = cached.get("setpoint")
+                power_on = cached.get("power_on", True)
         
         if temp is not None:
             # Infer heating status for thermostats (devices with a setpoint)
             status_val = mode
-            if mode == "Online" and setpoint != "":
-                try:
-                    if float(temp) < float(setpoint):
-                        status_val = "On"
-                    else:
-                        status_val = "Off"
-                except (ValueError, TypeError):
-                    pass
+            if setpoint != "":
+                if not power_on:
+                    status_val = "Off" # Or "Power Off"
+                else:
+                    try:
+                        # Added a small 0.2C hysteresis to avoid flickering
+                        if float(temp) < float(setpoint):
+                            status_val = "On"
+                        else:
+                            status_val = "Off"
+                    except (ValueError, TypeError):
+                        pass
 
             results.append([
                 timestamp,
