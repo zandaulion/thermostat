@@ -61,19 +61,30 @@ async def temp(ctx, location: str = None):
 
 @bot.command()
 async def plot(ctx, *args):
-    """Generate and send the temperature plot. Usage: !plot [days] [location] or !plot [location] [days]"""
+    """Generate and send the temperature plot. Usage: !plot [days] [location] [smooth]"""
     days = 7
     location = None
+    smooth = False
     
-    for arg in args:
+    # Process args
+    args_list = list(args)
+    if "smooth" in [a.lower() for a in args_list]:
+        smooth = True
+        args_list = [a for a in args_list if a.lower() != "smooth"]
+
+    for arg in args_list:
         try:
             days = int(arg)
         except ValueError:
             location = arg
 
-    await ctx.send(f"Generating plot for {location if location else 'default location'} over the last {days} days...")
+    status_msg = f"over the last {days} days"
+    if smooth:
+        status_msg += " (smoothed)"
     
-    path, error = create_plot(days=days, location=location)
+    await ctx.send(f"Generating plot for {location if location else 'default location'} {status_msg}...")
+    
+    path, error = create_plot(days=days, location=location, smooth=smooth)
     
     if error:
         await ctx.send(f"❌ Error: {error}")
