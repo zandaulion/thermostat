@@ -100,7 +100,7 @@ async def plot(ctx, *args):
         await ctx.send("❌ Error: Plot file not found.")
 
 @bot.command()
-async def switch(ctx, action: str = None, *, device_name: str = "bucatarie"):
+async def switch(ctx, action: str = None, *, device_name: str = "Kitchen Light"):
     """Control eWeLink switches. Usage: !switch [on|off|status] [name]"""
     if not EWELINK_EMAIL or not EWELINK_PASSWORD:
         await ctx.send("❌ Error: eWeLink credentials not configured.")
@@ -111,11 +111,6 @@ async def switch(ctx, action: str = None, *, device_name: str = "bucatarie"):
         return
 
     action = action.lower()
-    # Support both original name and ewelink name
-    target_names = [device_name.lower()]
-    if device_name.lower() == "bucatarie":
-        target_names.append("kitchen light")
-
     await ctx.send(f"⏳ Processing `{action}` for `{device_name}`...")
 
     try:
@@ -125,7 +120,7 @@ async def switch(ctx, action: str = None, *, device_name: str = "bucatarie"):
             
             target_dev = None
             for dev in devices:
-                if dev.get('name', '').lower() in target_names:
+                if dev.get('name', '').lower() == device_name.lower():
                     target_dev = dev
                     break
             
