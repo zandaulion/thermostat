@@ -5,11 +5,15 @@ from dotenv import load_dotenv
 from log_temp import fetch_and_log_data, LOG_FILE
 from plot_temp import create_plot
 import asyncio
+from ewelink import EWeLinkClient
 
 # Load credentials from .env file
 load_dotenv()
 
 TOKEN = os.environ.get("DISCORD_TOKEN")
+EWELINK_EMAIL = os.environ.get("EWELINK_EMAIL")
+EWELINK_PASSWORD = os.environ.get("EWELINK_PASSWORD")
+EWELINK_REGION = os.environ.get("EWELINK_REGION", "eu")
 
 if not TOKEN:
     print("Error: DISCORD_TOKEN not set in .env.")
@@ -94,6 +98,53 @@ async def plot(ctx, *args):
         await ctx.send(file=discord.File(path))
     else:
         await ctx.send("❌ Error: Plot file not found.")
+
+@bot.command()
+async def switch(ctx, action: str = None, *, device_name: str = "bucatarie"):
+    """Control eWeLink switches. Usage: !switch [on|off|status] [name]"""
+    if not EWELINK_EMAIL or not EWELINK_PASSWORD:
+        await ctx.send("❌ Error: eWeLink credentials not configured.")
+        return
+
+    if not action or action.lower() not in ["on", "off", "status"]:
+        await ctx.send("❓ Usage: `!switch <on|off|status> [device_name]`")
+        return
+
+    action = action.lower()
+    # Support both original name and ewelink name
+    target_names = [device_name.lower()]
+    if device_name.lower() == "bucatarie":
+        target_names.append("kitchen light")
+
+    await ctx.send(f"⏳ Processing `{action}` for `{device_name}`...")
+
+    try:
+        async with EWeLinkClient() as client:
+            await client.login(username=EWELINK_EMAIL, password=EWELINK_PASSWORD, region=EWELINK_REGION, country_code="+40")
+            devices = await client.get_devices()
+            
+            target_dev = None
+            for dev in devices:
+                if dev.get('name', '').lower() in target_names:
+                    target_dev = dev
+                    break
+            
+            if not target_dev:
+                await ctx.send(f"❌ Error: Device `{device_name}` not found.")
+                return
+
+            device_id = target_dev['deviceid']
+            name = target_dev['name']
+
+            if action == "status":
+                current_status = target_dev.get('params', {}).get('switch', 'unknown')
+                await ctx.send(f"💡 `{name}` is currently **{current_status.upper()}**.")
+            else:
+                await client.set_switch(device_id, action)
+                await ctx.send(f"✅ Successfully turned `{name}` **{action.upper()}**.")
+
+    except Exception as e:
+        await ctx.send(f"❌ Error: {e}")
 
 @bot.command()
 async def data(ctx):
