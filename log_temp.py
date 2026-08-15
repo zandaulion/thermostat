@@ -70,7 +70,8 @@ async def fetch_all():
                             device.ch1.current_room_temp, 
                             "", # No humidity for Salus
                             device.ch1.current_setpoint, 
-                            "On" if device.ch1.relay_status == 1 else "Off"
+                            "On" if device.ch1.relay_status == 1 else "Off",
+                            ""   # mains powered
                         ]
                         all_results.append(data_ch1)
                         
@@ -85,7 +86,8 @@ async def fetch_all():
                                 device.ch2.current_room_temp, 
                                 "",
                                 device.ch2.current_setpoint, 
-                                "On" if device.ch2.relay_status == 1 else "Off"
+                                "On" if device.ch2.relay_status == 1 else "Off",
+                                ""
                             ]
                             all_results.append(data_ch2)
                     except Exception as e:
@@ -117,7 +119,10 @@ async def fetch_and_log_data():
 
     # 3. Write all results to CSV
     file_exists = os.path.isfile(LOG_FILE)
-    HEADER = ["Timestamp", "Location", "Room", "Device Name", "Zone", "Temperature", "Humidity", "Setpoint", "Status"]
+    # Battery is appended, never inserted: the CSV is read by column name, so
+    # adding at the end keeps older files and the plotter working.
+    HEADER = ["Timestamp", "Location", "Room", "Device Name", "Zone",
+              "Temperature", "Humidity", "Setpoint", "Status", "Battery"]
     
     try:
         with open(LOG_FILE, mode='a', newline='') as f:

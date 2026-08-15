@@ -84,7 +84,10 @@ async def poll_once() -> dict:
     except Exception as exc:  # noqa: BLE001 - alerting must not stop logging
         log.warning("alert evaluation failed: %s", exc)
 
-    await ops.upstream.set(not errors or bool(rows), "; ".join(errors)[:200])
+    # Healthy means *nothing* failed. `not errors or rows` reads as "no
+    # errors, or we got something", which is true whenever any source works --
+    # so a partial failure reported as healthy and no alert was ever sent.
+    await ops.upstream.set(not errors, "; ".join(errors)[:200])
     return {
         "collected": len(rows), "written": written, "errors": errors,
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -143,7 +146,9 @@ async def now(device: dict = Depends(current_device)):
         r["stale"] = age > stale_after
     return {"readings": rows, "thresholds": {
         "cold_c": alerts.COLD_C, "hot_c": alerts.HOT_C,
-        "stuck_hours": alerts.STUCK_HOURS, "silent_minutes": alerts.SILENT_MINUTES}}
+        "stuck_hours": alerts.STUCK_HOURS,
+        "silent_minutes": alerts.SILENT_MINUTES,
+        "battery_pct": alerts.BATTERY_PCT}}
 
 
 @app.get("/api/history")
@@ -354,6 +359,7 @@ async def ingest(request: Request):
         "humidity": hum,
         "setpoint": _first_float(data, "setpoint", "target"),
         "status": (data.get("status") or "").strip() or None,
+        "battery": _first_float(data, "batt", "battery", "battery_percent"),
     }
     written = await store.insert([row])
     log.info("ingest from %s: %s %.1f°C", src["name"], row["location"],

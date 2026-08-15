@@ -54,12 +54,18 @@ h2{font-size:.76rem;margin:0;text-transform:uppercase;letter-spacing:.08em;
   letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .tile .t small{font-size:.95rem;font-weight:600;margin-left:2px}
 .tile .meta{margin-top:6px;font-size:.8rem;color:var(--muted)}
-.t.c-cold{color:var(--cold)} .t.c-ok{color:var(--ok)}
-.t.c-warm{color:var(--warm)} .t.c-hot{color:var(--hot)}
-.badge{position:absolute;top:12px;right:12px;font-size:.64rem;font-weight:700;
-  text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px;
-  border:1px solid currentColor}
+/* Colour is reserved for the two states that raise an alert. */
+.t.c-cold{color:var(--cold)} .t.c-ok{color:var(--ok)} .t.c-hot{color:var(--hot)}
+.badges{position:absolute;top:12px;right:12px;display:flex;gap:5px;
+  align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.badge{font-size:.64rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;padding:2px 7px;border-radius:999px;
+  border:1px solid currentColor;display:inline-flex;align-items:center;gap:4px}
 .badge.heat{color:var(--heat)} .badge.stale{color:var(--hot)}
+/* A flat battery is the thing that turns into a silent sensor, so it gets
+   the same weight as an alarm rather than a quiet footnote. */
+.badge.batt{color:var(--hot)}
+.badge.batt svg{display:block}
 .tile.stale{opacity:.6}
 
 /* --- chart ------------------------------------------------------------- */

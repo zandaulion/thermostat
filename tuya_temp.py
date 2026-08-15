@@ -60,6 +60,7 @@ async def fetch_tuya_data_all():
         
         temp = None
         hum = None
+        battery = None
         setpoint = ""
         power_on = True
         mode = "Offline (Last Known)"
@@ -74,6 +75,13 @@ async def fetch_tuya_data_all():
             for item in status['result']:
                 code = item['code']
                 val = item['value']
+
+                if code in ('battery_percentage', 'battery_percent'):
+                    battery = val
+                elif code == 'battery_state':
+                    # Coarse devices report a word; map it to something a
+                    # threshold can be applied to.
+                    battery = {'low': 10, 'middle': 50, 'high': 90}.get(val)
                 
                 if code in ['va_temperature', 'temp_current']:
                     temp = val / 10.0
@@ -87,10 +95,11 @@ async def fetch_tuya_data_all():
             # Update cache if we got new data
             if temp is not None:
                 cache[dev_id] = {
-                    "temp": temp, 
-                    "hum": hum, 
-                    "setpoint": setpoint, 
+                    "temp": temp,
+                    "hum": hum,
+                    "setpoint": setpoint,
                     "power_on": power_on,
+                    "battery": battery,
                     "timestamp": timestamp
                 }
         else:
@@ -101,6 +110,7 @@ async def fetch_tuya_data_all():
                 hum = cached.get("hum")
                 setpoint = cached.get("setpoint")
                 power_on = cached.get("power_on", True)
+                battery = cached.get("battery")
         
         if temp is not None:
             # Infer heating status for thermostats (devices with a setpoint)
@@ -127,7 +137,8 @@ async def fetch_tuya_data_all():
                 temp,
                 hum if hum is not None else "",
                 setpoint,
-                status_val
+                status_val,
+                battery if battery is not None else ""
             ])
 
     save_cache(cache)

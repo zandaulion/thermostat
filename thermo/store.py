@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS readings (
     temperature REAL,
     humidity    REAL,
     setpoint    REAL,
-    status      TEXT
+    status      TEXT,
+    battery     REAL
 );
 CREATE INDEX IF NOT EXISTS readings_loc_ts ON readings(location, ts);
 CREATE INDEX IF NOT EXISTS readings_ts ON readings(ts);
@@ -73,6 +74,10 @@ def init() -> None:
             con.execute("DROP INDEX readings_unique")
             log.info("rebuilding readings_unique to handle NULL room/device")
         con.executescript(SCHEMA)
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(readings)")}
+        if "battery" not in cols:
+            con.execute("ALTER TABLE readings ADD COLUMN battery REAL")
+            log.info("migrated readings: added battery")
 
 
 def _insert_blocking(rows: list[dict]) -> int:
@@ -82,9 +87,9 @@ def _insert_blocking(rows: list[dict]) -> int:
         cur = con.executemany(
             """INSERT OR IGNORE INTO readings
                  (ts, location, room, device, zone, temperature, humidity,
-                  setpoint, status)
+                  setpoint, status, battery)
                VALUES (:ts, :location, :room, :device, :zone, :temperature,
-                       :humidity, :setpoint, :status)""",
+                       :humidity, :setpoint, :status, :battery)""",
             rows,
         )
         return cur.rowcount
@@ -118,13 +123,15 @@ def _history_blocking(location: str | None, hours: int, max_points: int) -> list
     with connect() as con:
         if location:
             rows = con.execute(
-                """SELECT ts, location, temperature, humidity, setpoint, status
+                """SELECT ts, location, temperature, humidity, setpoint,
+                          status, battery
                      FROM readings WHERE location = ? AND ts >= ? ORDER BY ts""",
                 (location, since),
             ).fetchall()
         else:
             rows = con.execute(
-                """SELECT ts, location, temperature, humidity, setpoint, status
+                """SELECT ts, location, temperature, humidity, setpoint,
+                          status, battery
                      FROM readings WHERE ts >= ? ORDER BY ts""",
                 (since,),
             ).fetchall()

@@ -59,6 +59,11 @@ half of the value; the useful half is being told **without asking**:
 | below `ALERT_COLD_C` (8°C) | an unheated property in winter is a burst-pipe risk, and nobody is there to notice |
 | heating on for `ALERT_STUCK_HOURS` (6h) | a stuck relay or a door left open, costing money quietly |
 | silent for `ALERT_SILENT_MINUTES` (90) | a sensor that stops reporting looks exactly like "everything is fine" — the dangerous failure |
+| battery below `ALERT_BATTERY_PCT` (15%) | a flat battery *becomes* a silent sensor, at a property nobody is visiting |
+| `TUYA_TRIAL_EXPIRES` approaching | when the cloud subscription lapses, several sensors stop at once; warning beforehand stops that looking like simultaneous hardware failure |
+
+A tile also carries a battery badge below the threshold, so the reminder is
+present every time you open the app rather than only when the alert fired.
 
 Alerts are **edge-triggered**: a condition that persists produces one message,
 not one per poll, and recovery is reported once. A channel that repeats itself

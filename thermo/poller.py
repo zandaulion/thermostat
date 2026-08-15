@@ -35,6 +35,8 @@ def _to_row(rec: list, now: str) -> dict:
         "humidity": num(rec[6]),
         "setpoint": num(rec[7]),
         "status": (str(rec[8]) if len(rec) > 8 and rec[8] is not None else None),
+        # Appended later than the rest, so older callers may not send it.
+        "battery": num(rec[9]) if len(rec) > 9 else None,
     }
 
 

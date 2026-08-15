@@ -38,12 +38,26 @@ const fmtTime = (iso, long) => new Date(iso).toLocaleString('ro-RO',
        : { hour: '2-digit', minute: '2-digit' });
 
 /* ------------------------------------------------------------- readings -- */
+/* A battery outline whose fill tracks the charge, so it reads at a glance
+   without needing the number beside it. */
+function batteryIcon(pct) {
+  const w = Math.max(1, Math.round((Math.max(0, Math.min(100, pct)) / 100) * 12));
+  return `<svg viewBox="0 0 22 12" width="17" height="10" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="17" height="11" rx="2.5"
+            fill="none" stroke="currentColor"/>
+      <rect x="18.5" y="4" width="3" height="4" rx="1" fill="currentColor"/>
+      <rect x="2.5" y="2.5" width="${w}" height="7" rx="1" fill="currentColor"/>
+    </svg>`;
+}
+
 function tempClass(t) {
+  // Only the thresholds that actually raise an alert get a colour. An
+  // arbitrary "warm above 24" band made a normal summer indoor reading look
+  // like a problem, which trains you to ignore the colour entirely.
   const th = state.thresholds;
   if (t == null) return '';
   if (t <= (th.cold_c ?? 8)) return 'c-cold';
   if (t >= (th.hot_c ?? 30)) return 'c-hot';
-  if (t >= 24) return 'c-warm';
   return 'c-ok';
 }
 
@@ -63,14 +77,26 @@ async function loadNow() {
   $('cards').innerHTML = rows.length ? rows.map((r) => {
     const t = r.temperature;
     const heating = (r.status || '').toLowerCase() === 'on';
+    const lowBatt = r.battery != null && r.battery <= (state.thresholds.battery_pct ?? 15);
+
     const bits = [];
     if (r.humidity != null) bits.push(`${r.humidity.toFixed(0)}% umiditate`);
     if (r.setpoint != null) bits.push(`prag ${r.setpoint.toFixed(1)}°`);
     bits.push(r.age_minutes < 60 ? `acum ${r.age_minutes} min`
                                  : `acum ${Math.round(r.age_minutes / 60)} h`);
+
+    // Several badges can apply at once -- a silent sensor with a flat battery
+    // is the most likely combination, and is exactly when both matter.
+    const badges = [];
+    if (lowBatt) {
+      badges.push(`<span class="badge batt" title="Baterie ${r.battery.toFixed(0)}%">`
+        + batteryIcon(r.battery) + `${r.battery.toFixed(0)}%</span>`);
+    }
+    if (r.stale) badges.push('<span class="badge stale">tace</span>');
+    else if (heating) badges.push('<span class="badge heat">încălzire</span>');
+
     return `<div class="tile${r.stale ? ' stale' : ''}">
-        ${r.stale ? '<span class="badge stale">tace</span>'
-                  : heating ? '<span class="badge heat">încălzire</span>' : ''}
+        ${badges.length ? `<div class="badges">${badges.join('')}</div>` : ''}
         <div class="loc">${esc(r.location)}</div>
         <p class="t ${tempClass(t)}">${t == null ? '—' : t.toFixed(1)}<small>°C</small></p>
         <div class="meta">${esc(bits.join(' · '))}</div>
@@ -100,16 +126,21 @@ function renderChips(locs) {
 
 /* ---------------------------------------------------------------- chart -- */
 async function loadHistory() {
-  renderChips(state.location ? [state.location] : []);
+  // loadNow picks a default location on first run. Fetching history without
+  // one returns every location interleaved by timestamp, which drawn as a
+  // single path looks like a fault in the sensor rather than in the chart.
+  if (!state.location) await loadNow();
+  if (!state.location) { state.points = []; drawChart(); return; }
+  renderChips([state.location]);
   try {
-    const d = await api(`/api/history?location=${encodeURIComponent(state.location || '')}`
+    const d = await api(`/api/history?location=${encodeURIComponent(state.location)}`
                       + `&hours=${state.hours}`);
     state.points = (d.points || []).filter((p) => p.temperature != null);
   } catch (ex) {
     state.points = [];
     if (ex instanceof ApiError && ex.status === 401) { showGate(''); return; }
   }
-  await loadNow();          // keeps the location chips in step
+  await loadNow();          // refreshes the tiles and the location chips
   drawChart();
 }
 

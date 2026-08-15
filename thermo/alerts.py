@@ -12,6 +12,11 @@ Each rule needs a reason to exist beyond "we can measure it":
            left open; it costs money quietly
   silent   a sensor that stops reporting looks exactly like "everything is
            fine" on a dashboard, which is the dangerous failure
+  battery  a flat battery *becomes* a silent sensor, at a property nobody is
+           visiting; warning beforehand turns a post-mortem into an errand
+  trial    the Tuya cloud subscription expires on a date, and when it does
+           three sensors stop at once -- worth saying so in advance rather
+           than letting it look like three simultaneous hardware failures
 """
 from __future__ import annotations
 
@@ -31,6 +36,11 @@ SILENT_MINUTES = int(os.getenv("ALERT_SILENT_MINUTES", "90"))
 # Never repeat the same firing alert more often than this, even if it clears
 # and re-fires around the threshold.
 COOLDOWN = timedelta(hours=float(os.getenv("ALERT_COOLDOWN_HOURS", "6")))
+BATTERY_PCT = float(os.getenv("ALERT_BATTERY_PCT", "15"))
+# ISO date, e.g. 2027-02-15. Empty disables the reminder.
+TRIAL_EXPIRES = os.getenv("TUYA_TRIAL_EXPIRES", "").strip()
+TRIAL_WARN_DAYS = [int(d) for d in
+                   os.getenv("TRIAL_WARN_DAYS", "30,14,3").split(",") if d.strip()]
 
 
 def _state_blocking(key: str) -> dict | None:
@@ -148,6 +158,24 @@ async def evaluate(latest: list[dict], recent: dict[str, list[dict]]) -> list[di
                 "tag": f"hot-{loc}", "priority": "default",
             })
 
+        # --- battery running out ----------------------------------------
+        batt = row.get("battery")
+        if batt is not None:
+            edge = await _transition(f"battery:{loc}", batt <= BATTERY_PCT)
+            if edge == "fire":
+                out.append({
+                    "title": f"{loc}: baterie {batt:.0f}%",
+                    "body": f"Sub {BATTERY_PCT:.0f}% — schimb-o înainte să tacă "
+                            "senzorul.",
+                    "tag": f"battery-{loc}", "priority": "high",
+                })
+            elif edge == "clear":
+                out.append({
+                    "title": f"{loc}: baterie schimbată",
+                    "body": f"Acum {batt:.0f}%.",
+                    "tag": f"battery-{loc}", "priority": "low",
+                })
+
         # --- heating stuck on -------------------------------------------
         hours = _hours_on(recent.get(loc, []))
         edge = await _transition(f"stuck:{loc}", hours >= STUCK_HOURS)
@@ -163,5 +191,33 @@ async def evaluate(latest: list[dict], recent: dict[str, list[dict]]) -> list[di
                 "body": f"Acum {temp:.1f}°C.",
                 "tag": f"stuck-{loc}", "priority": "low",
             })
+
+    # --- the cloud subscription's own expiry ----------------------------
+    if TRIAL_EXPIRES:
+        try:
+            expires = datetime.fromisoformat(TRIAL_EXPIRES).replace(tzinfo=timezone.utc)
+            days = (expires - now).days
+            # One rule per threshold, so each fires once as it is crossed
+            # rather than repeating every poll for the last month.
+            for d in sorted(TRIAL_WARN_DAYS, reverse=True):
+                edge = await _transition(f"trial:{d}", 0 <= days <= d)
+                if edge == "fire":
+                    out.append({
+                        "title": f"Abonamentul Tuya expiră în {days} zile",
+                        "body": f"După {TRIAL_EXPIRES} senzorii Tuya se opresc. "
+                                "Prelungește-l sau mută-i pe /api/ingest.",
+                        "tag": "tuya-trial", "priority": "high",
+                    })
+                    break
+            if days < 0:
+                edge = await _transition("trial:expired", True)
+                if edge == "fire":
+                    out.append({
+                        "title": "Abonamentul Tuya a expirat",
+                        "body": "Senzorii Tuya nu mai răspund.",
+                        "tag": "tuya-trial", "priority": "high",
+                    })
+        except ValueError:
+            log.warning("TUYA_TRIAL_EXPIRES is not an ISO date: %r", TRIAL_EXPIRES)
 
     return out
