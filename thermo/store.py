@@ -32,8 +32,25 @@ CREATE INDEX IF NOT EXISTS readings_loc_ts ON readings(location, ts);
 CREATE INDEX IF NOT EXISTS readings_ts ON readings(ts);
 -- The poller can run twice for the same minute after a restart; this makes a
 -- repeated insert a no-op rather than a duplicate point on the chart.
+-- COALESCE is essential: SQLite treats NULLs as distinct in a UNIQUE index,
+-- so a plain index on these columns silently stops deduplicating for any
+-- source that leaves room or device unset.
 CREATE UNIQUE INDEX IF NOT EXISTS readings_unique
-    ON readings(location, room, device, ts);
+    ON readings(location, COALESCE(room,''), COALESCE(device,''), ts);
+
+-- A push source: anything that sends readings to /api/ingest rather than
+-- being polled. Keeps the app independent of any one vendor's cloud, which
+-- is how three sensors went dark when Tuya changed its pricing.
+CREATE TABLE IF NOT EXISTS sources (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    location   TEXT NOT NULL,
+    room       TEXT,
+    token_hash TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL,
+    last_seen  TEXT,
+    revoked    INTEGER NOT NULL DEFAULT 0
+);
 
 CREATE TABLE IF NOT EXISTS alert_state (
     key        TEXT PRIMARY KEY,         -- e.g. "cold:Snagov"
@@ -47,6 +64,14 @@ CREATE TABLE IF NOT EXISTS alert_state (
 def init() -> None:
     with connect() as con:
         con.execute("PRAGMA journal_mode = WAL")
+        # The first version of this index did not COALESCE and so failed to
+        # deduplicate rows with a NULL room; replace it if present.
+        row = con.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND name='readings_unique'"
+        ).fetchone()
+        if row and row[0] and "COALESCE" not in row[0]:
+            con.execute("DROP INDEX readings_unique")
+            log.info("rebuilding readings_unique to handle NULL room/device")
         con.executescript(SCHEMA)
 
 
@@ -124,6 +149,64 @@ def _locations_blocking() -> list[str]:
 
 async def locations() -> list[str]:
     return await asyncio.to_thread(_locations_blocking)
+
+
+def _source_by_token_blocking(token_hash: str) -> dict | None:
+    with connect() as con:
+        row = con.execute(
+            "SELECT * FROM sources WHERE token_hash = ? AND revoked = 0",
+            (token_hash,),
+        ).fetchone()
+        if not row:
+            return None
+        con.execute(
+            "UPDATE sources SET last_seen = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(timespec="seconds"), row["id"]),
+        )
+        return dict(row)
+
+
+async def source_by_token(token_hash: str) -> dict | None:
+    return await asyncio.to_thread(_source_by_token_blocking, token_hash)
+
+
+def _add_source_blocking(name: str, location: str, room: str | None,
+                         token_hash: str) -> int:
+    with connect() as con:
+        cur = con.execute(
+            """INSERT INTO sources (name, location, room, token_hash, created_at)
+               VALUES (?,?,?,?,?)""",
+            (name, location, room, token_hash,
+             datetime.now(timezone.utc).isoformat(timespec="seconds")),
+        )
+        return cur.lastrowid
+
+
+async def add_source(name: str, location: str, room: str | None,
+                     token_hash: str) -> int:
+    return await asyncio.to_thread(_add_source_blocking, name, location, room, token_hash)
+
+
+def _list_sources_blocking() -> list[dict]:
+    with connect() as con:
+        return [dict(r) for r in con.execute(
+            """SELECT id, name, location, room, created_at, last_seen, revoked
+                 FROM sources ORDER BY id""")]
+
+
+async def list_sources() -> list[dict]:
+    return await asyncio.to_thread(_list_sources_blocking)
+
+
+def _revoke_source_blocking(source_id: int, revoked: bool) -> bool:
+    with connect() as con:
+        cur = con.execute("UPDATE sources SET revoked = ? WHERE id = ?",
+                          (int(revoked), source_id))
+        return cur.rowcount > 0
+
+
+async def revoke_source(source_id: int, revoked: bool = True) -> bool:
+    return await asyncio.to_thread(_revoke_source_blocking, source_id, revoked)
 
 
 def _stats_blocking() -> dict:

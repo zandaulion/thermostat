@@ -91,6 +91,31 @@ readings database, the VAPID key, and the Tuya token cache. **The VAPID key
 must survive rebuilds** — regenerating it silently invalidates every push
 subscription already granted.
 
+### Pushing readings in
+
+Polling a vendor's cloud makes the app hostage to that vendor's pricing —
+which is how three sensors went dark when Tuya moved its API behind an
+enterprise contract. `POST` (or `GET`) `/api/ingest` lets anything send a
+reading instead:
+
+```bash
+./admin.sh source "Shelly H&T salon" "Basarabia" "Living Room"
+# prints a token and a ready-made URL, once
+```
+
+```
+/api/ingest?token=<secret>&temp=21.4&hum=53
+```
+
+`GET` is supported because most sensors can only build a URL with
+placeholders, not a JSON body — a Shelly webhook, for instance. The token is
+a bearer secret scoped to one sensor and revocable on its own. Field names
+are matched liberally (`temp`/`temperature`/`tC`, `hum`/`humidity`/`rh`), so
+a new device rarely needs an adapter.
+
+Pushed readings are indistinguishable from polled ones afterwards: same
+table, same charts, same alerts.
+
 ### Importing existing history
 
 ```bash
@@ -140,8 +165,15 @@ this one used to do exactly that, all now fixed:
   UI and raise an alert.
 
 Tuya's free **IoT Core trial lasts one month** and cannot be re-subscribed on
-the same account. When it lapses, those sensors stop and the `silent` alert
-is what tells you.
+the same account; past it, their pricing is enterprise-scale. When it lapses
+those sensors stop, and the `silent` alert is what tells you. The durable
+answer is `/api/ingest` above — a sensor that pushes to your own endpoint has
+no vendor to lose.
+
+One SQLite detail worth remembering: **NULLs are distinct in a UNIQUE
+index**, so the deduplicating index on readings has to `COALESCE` room and
+device. Without that it silently stops deduplicating for any source that
+leaves them unset — which is most push sources.
 
 ## 🛡️ Security
 Your credentials in `.env` and the data in `data/` are automatically ignored by Git (via `.gitignore`) to prevent accidental exposure of your account details.

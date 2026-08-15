@@ -283,3 +283,111 @@ async def admin_revoke_invite(invite_id: int):
 @app.post("/api/admin/poll", dependencies=[Depends(admin_only)])
 async def admin_poll():
     return await poll_once()
+
+
+# --------------------------------------------------------------------------
+# ingest — readings pushed in, rather than polled out
+# --------------------------------------------------------------------------
+def _first_float(payload: dict, *names) -> float | None:
+    """Accept whatever a device calls the field.
+
+    Shelly sends `temp`, some send `temperature`, Tasmota sends `Temperature`.
+    Being liberal here costs nothing and saves a per-vendor adapter.
+    """
+    for n in names:
+        for key in (n, n.lower(), n.upper(), n.capitalize()):
+            if key in payload and payload[key] not in (None, ""):
+                try:
+                    return float(payload[key])
+                except (TypeError, ValueError):
+                    pass
+    return None
+
+
+@app.api_route("/api/ingest", methods=["GET", "POST"])
+async def ingest(request: Request):
+    """Accept a reading from a push source.
+
+    GET as well as POST because most sensors -- Shelly's webhooks among them
+    -- can only build a URL with placeholders, not a JSON body. The token
+    travels in the query string in that case, which is why it is a bearer
+    secret scoped to one sensor and revocable on its own.
+    """
+    data = dict(request.query_params)
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                data = {**data, **body}
+        except Exception:  # noqa: BLE001 - form or empty bodies are fine
+            try:
+                data = {**data, **dict(await request.form())}
+            except Exception:  # noqa: BLE001
+                pass
+
+    token = (data.get("token") or "").strip()
+    if not token:
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+    if not token:
+        raise HTTPException(401, "Token lipsă.")
+
+    src = await store.source_by_token(accounts._hash(token))
+    if not src:
+        raise HTTPException(401, "Token invalid.")
+
+    temp = _first_float(data, "temp", "temperature", "tC", "t")
+    hum = _first_float(data, "hum", "humidity", "rh", "h")
+    if temp is None and hum is None:
+        raise HTTPException(400, "Nicio valoare de temperatură sau umiditate.")
+
+    row = {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        # The source decides where it is; the query string may override it for
+        # a multi-sensor gateway posting on behalf of several rooms.
+        "location": (data.get("location") or src["location"]).strip(),
+        "room": (data.get("room") or src["room"] or None),
+        "device": src["name"],
+        "zone": data.get("zone") or None,
+        "temperature": temp,
+        "humidity": hum,
+        "setpoint": _first_float(data, "setpoint", "target"),
+        "status": (data.get("status") or "").strip() or None,
+    }
+    written = await store.insert([row])
+    log.info("ingest from %s: %s %.1f°C", src["name"], row["location"],
+             temp if temp is not None else float("nan"))
+    return {"ok": True, "stored": written}
+
+
+@app.get("/api/admin/sources", dependencies=[Depends(admin_only)])
+async def admin_sources():
+    base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+    return {"sources": await store.list_sources(), "ingest_url": f"{base}/api/ingest"}
+
+
+@app.post("/api/admin/sources", dependencies=[Depends(admin_only)])
+async def admin_add_source(payload: dict = Body(...)):
+    name = (payload.get("name") or "").strip()
+    location = (payload.get("location") or "").strip()
+    if not name or not location:
+        raise HTTPException(400, "name and location are required")
+    token = accounts.new_device_token()
+    sid = await store.add_source(name, location,
+                                 (payload.get("room") or "").strip() or None,
+                                 accounts._hash(token))
+    base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+    return {
+        "id": sid, "name": name, "location": location,
+        # Shown once: only the hash is stored.
+        "token": token,
+        "example_url": f"{base}/api/ingest?token={token}&temp=21.4&hum=53",
+    }
+
+
+@app.post("/api/admin/sources/{source_id}/revoke", dependencies=[Depends(admin_only)])
+async def admin_revoke_source(source_id: int, payload: dict = Body(default={})):
+    if not await store.revoke_source(source_id, bool(payload.get("revoked", True))):
+        raise HTTPException(404, "no such source")
+    return {"id": source_id}
