@@ -1,0 +1,30 @@
+[Unit]
+Description=Termometru — temperature monitor and alerts
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/thermo:latest
+ContainerName=thermo
+# Loopback only: reachable through Caddy, never directly from the network.
+PublishPort=127.0.0.1:8093:8000
+# Readings database, VAPID key and the Tuya token cache. Named volume: the
+# VAPID key must survive rebuilds or every push subscription dies silently.
+Volume=thermo-data:/data
+# Device-cloud credentials and app secrets. Owned by the service user, 0600 --
+# rootless podman parses this itself, so root ownership only breaks it.
+EnvironmentFile=%h/.config/thermo/thermo.env
+Environment=DATA_DIR=/data
+# tuya_temp.py caches device metadata next to itself by default, which is not
+# writable in the image; point it at the volume.
+Environment=TUYA_CACHE_DIR=/data/tuya
+Environment=TZ=Europe/Bucharest
+NoNewPrivileges=true
+DropCapability=ALL
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -4,3 +4,6 @@ temp_plot.png
 venv/
 __pycache__/
 *.pyc
+
+# Site-specific admin endpoint
+.admin.env

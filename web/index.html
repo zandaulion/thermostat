@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Termometru</title>
+<meta name="description" content="Temperatura din locuințe, cu alerte la frig, încălzire rămasă pornită și senzori care tac.">
+<meta name="theme-color" content="#0284c7">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Termometru">
+<link rel="stylesheet" href="/app.css?v=__BUILD_VERSION__">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <img class="logo" src="/icons/icon-192.png" width="42" height="42" alt="">
+    <div>
+      <h1>Termometru</h1>
+      <p class="sub">Temperatura din locuințe, cu alerte când contează.</p>
+    </div>
+  </header>
+
+  <!-- gate ---------------------------------------------------------------->
+  <section id="gate" hidden>
+    <div class="card">
+      <h2 id="gate-title">Necesită invitație</h2>
+      <p class="gate-lead" id="gate-lead">
+        Aplicația este doar pe bază de invitație. Dacă ai primit un link sau un
+        cod, introdu-l mai jos ca să înregistrezi acest dispozitiv.
+      </p>
+      <form class="search" id="form-code">
+        <input id="invite-code" autocomplete="off" autocapitalize="characters"
+               spellcheck="false" placeholder="ABCD-EFGH-JKLM"
+               aria-label="Cod de invitație" required>
+        <button class="btn" type="submit" id="btn-activate">Activează</button>
+      </form>
+      <p class="err" id="gate-err" hidden></p>
+      <p class="hint">
+        <strong>Pe iPhone:</strong> adaugă întâi pagina pe ecranul principal
+        (Distribuie → Adaugă la ecranul principal), apoi deschide-o de acolo și
+        introdu codul. Notificările funcționează doar din aplicația instalată.
+      </p>
+    </div>
+  </section>
+
+  <div id="app" hidden>
+
+    <div class="install" id="install" hidden>
+      <div class="install-text">
+        <strong id="install-title">Instalează Termometru</strong>
+        <span id="install-note">Adaug-o pe ecranul principal ca alertele să
+          ajungă sigur.</span>
+      </div>
+      <div class="install-actions">
+        <button class="btn" id="btn-install" hidden>Instalează</button>
+        <button class="link" id="btn-install-dismiss">Nu acum</button>
+      </div>
+    </div>
+
+    <!-- current readings -->
+    <section class="block">
+      <div class="head">
+        <h2>Acum</h2>
+        <button class="link" id="btn-notify">Activează notificările</button>
+      </div>
+      <div class="cards" id="cards"></div>
+      <p class="err" id="now-err" hidden></p>
+    </section>
+
+    <!-- chart -->
+    <section class="block">
+      <div class="head">
+        <h2>Istoric</h2>
+        <button class="link" id="btn-test">Notificare de test</button>
+      </div>
+      <div class="card chart-card">
+        <div class="chips" id="loc-chips"></div>
+        <div class="chips ranges" id="range-chips"></div>
+        <div class="chart-wrap">
+          <svg id="chart" viewBox="0 0 720 300" preserveAspectRatio="none"
+               role="img" aria-label="Grafic temperatură"></svg>
+          <div class="readout" id="readout" hidden></div>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+    </section>
+
+  </div>
+
+  <p class="foot" id="foot"></p>
+</div>
+<script src="/app.js?v=__BUILD_VERSION__"></script>
+</body>
+</html>

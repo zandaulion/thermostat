@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "Termometru — temperatura din locuințe",
+  "short_name": "Termometru",
+  "description": "Temperatura din locuințe, cu alerte la frig, încălzire rămasă pornită și senzori care tac.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0284c7",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

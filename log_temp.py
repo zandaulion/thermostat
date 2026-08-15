@@ -23,7 +23,19 @@ def get_devices_config():
             return json.load(f)
     return {}
 
-async def fetch_and_log_data():
+async def fetch_all():
+    """Collect readings from every configured source.
+
+    Split out from fetch_and_log_data so callers that do not want a CSV --
+    the web app polls into SQLite -- share exactly this code rather than a
+    reimplementation of it that can drift.
+
+    Returns (rows, error) where each row is in HEADER order. `error` is set
+    whenever *any* source failed, even if another succeeded -- a partial
+    collection that reports success is indistinguishable from a healthy one,
+    and that is how a dead sensor goes unnoticed.
+    """
+    problems = []
     email = os.environ.get("SALUS_EMAIL")
     password = os.environ.get("SALUS_PASSWORD")
     config = get_devices_config()
@@ -85,14 +97,23 @@ async def fetch_and_log_data():
     try:
         tuya_results, tuya_err = await fetch_tuya_data_all()
         if tuya_err:
+            problems.append(f"tuya: {tuya_err}")
             print(f"[{datetime.now()}] Tuya fetch failed: {tuya_err}")
         if tuya_results:
             all_results.extend(tuya_results)
     except Exception as e:
+        problems.append(f"tuya: {e}")
         print(f"[{datetime.now()}] Error in Tuya fetch: {e}")
 
     if not all_results:
-        return None, "No data collected from any source."
+        return None, "; ".join(problems) or "No data collected from any source."
+    return all_results, ("; ".join(problems) if problems else None)
+
+
+async def fetch_and_log_data():
+    all_results, err = await fetch_all()
+    if err:
+        return None, err
 
     # 3. Write all results to CSV
     file_exists = os.path.isfile(LOG_FILE)

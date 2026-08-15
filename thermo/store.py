@@ -1,0 +1,137 @@
+"""Readings storage.
+
+One row per sensor per poll. The Discord version appended to a CSV and re-read
+the whole file with pandas for every plot; at 4 locations every 10 minutes
+that is ~17k rows a month, and a month of history is a normal thing to ask
+for. SQLite with an index answers the same question without loading the lot.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
+
+from .db import connect
+
+log = logging.getLogger("thermo.store")
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS readings (
+    id          INTEGER PRIMARY KEY,
+    ts          TEXT NOT NULL,           -- ISO8601, UTC
+    location    TEXT NOT NULL,
+    room        TEXT,
+    device      TEXT,
+    zone        TEXT,
+    temperature REAL,
+    humidity    REAL,
+    setpoint    REAL,
+    status      TEXT
+);
+CREATE INDEX IF NOT EXISTS readings_loc_ts ON readings(location, ts);
+CREATE INDEX IF NOT EXISTS readings_ts ON readings(ts);
+-- The poller can run twice for the same minute after a restart; this makes a
+-- repeated insert a no-op rather than a duplicate point on the chart.
+CREATE UNIQUE INDEX IF NOT EXISTS readings_unique
+    ON readings(location, room, device, ts);
+
+CREATE TABLE IF NOT EXISTS alert_state (
+    key        TEXT PRIMARY KEY,         -- e.g. "cold:Snagov"
+    firing     INTEGER NOT NULL DEFAULT 0,
+    since      TEXT,
+    last_sent  TEXT
+);
+"""
+
+
+def init() -> None:
+    with connect() as con:
+        con.execute("PRAGMA journal_mode = WAL")
+        con.executescript(SCHEMA)
+
+
+def _insert_blocking(rows: list[dict]) -> int:
+    if not rows:
+        return 0
+    with connect() as con:
+        cur = con.executemany(
+            """INSERT OR IGNORE INTO readings
+                 (ts, location, room, device, zone, temperature, humidity,
+                  setpoint, status)
+               VALUES (:ts, :location, :room, :device, :zone, :temperature,
+                       :humidity, :setpoint, :status)""",
+            rows,
+        )
+        return cur.rowcount
+
+
+async def insert(rows: list[dict]) -> int:
+    return await asyncio.to_thread(_insert_blocking, rows)
+
+
+def _latest_blocking() -> list[dict]:
+    with connect() as con:
+        return [
+            dict(r)
+            for r in con.execute(
+                """SELECT r.* FROM readings r
+                   JOIN (SELECT location, room, device, MAX(ts) AS ts
+                           FROM readings GROUP BY location, room, device) m
+                     ON m.location = r.location AND m.room IS r.room
+                    AND m.device IS r.device AND m.ts = r.ts
+                  ORDER BY r.location"""
+            )
+        ]
+
+
+async def latest() -> list[dict]:
+    return await asyncio.to_thread(_latest_blocking)
+
+
+def _history_blocking(location: str | None, hours: int, max_points: int) -> list[dict]:
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    with connect() as con:
+        if location:
+            rows = con.execute(
+                """SELECT ts, location, temperature, humidity, setpoint, status
+                     FROM readings WHERE location = ? AND ts >= ? ORDER BY ts""",
+                (location, since),
+            ).fetchall()
+        else:
+            rows = con.execute(
+                """SELECT ts, location, temperature, humidity, setpoint, status
+                     FROM readings WHERE ts >= ? ORDER BY ts""",
+                (since,),
+            ).fetchall()
+    out = [dict(r) for r in rows]
+    # Thin evenly rather than truncating: a month of 10-minute samples is
+    # ~4300 points per location, far more than any phone screen can show.
+    if len(out) > max_points:
+        step = len(out) / max_points
+        out = [out[int(i * step)] for i in range(max_points)]
+    return out
+
+
+async def history(location: str | None, hours: int, max_points: int = 600) -> list[dict]:
+    return await asyncio.to_thread(_history_blocking, location, hours, max_points)
+
+
+def _locations_blocking() -> list[str]:
+    with connect() as con:
+        return [r[0] for r in con.execute(
+            "SELECT DISTINCT location FROM readings ORDER BY location")]
+
+
+async def locations() -> list[str]:
+    return await asyncio.to_thread(_locations_blocking)
+
+
+def _stats_blocking() -> dict:
+    with connect() as con:
+        n, first, last = con.execute(
+            "SELECT COUNT(*), MIN(ts), MAX(ts) FROM readings").fetchone()
+        return {"readings": n, "first": first, "last": last}
+
+
+async def stats() -> dict:
+    return await asyncio.to_thread(_stats_blocking)

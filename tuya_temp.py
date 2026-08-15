@@ -6,7 +6,10 @@ from datetime import datetime
 
 load_dotenv()
 
-CACHE_FILE = "data/tuya_cache.json"
+# Overridable so a container can point it at a writable volume; the default
+# keeps the old behaviour for the docker-compose setup.
+CACHE_DIR = os.environ.get("TUYA_CACHE_DIR", "data")
+CACHE_FILE = os.path.join(CACHE_DIR, "tuya_cache.json")
 
 def get_cache():
     if os.path.exists(CACHE_FILE):
@@ -15,7 +18,7 @@ def get_cache():
     return {}
 
 def save_cache(cache):
-    os.makedirs("data", exist_ok=True)
+    os.makedirs(CACHE_DIR, exist_ok=True)
     with open(CACHE_FILE, 'w') as f:
         json.dump(cache, f)
 
@@ -40,6 +43,11 @@ async def fetch_tuya_data_all():
     cache = get_cache()
     
     results = []
+    # A device we cannot read must be reported, not silently omitted. An
+    # expired cloud subscription produces exactly this: authentication
+    # succeeds, every query is refused, and the loop yields nothing while
+    # claiming success.
+    failures = []
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     for dev_conf in tuya_devices:
@@ -56,6 +64,10 @@ async def fetch_tuya_data_all():
         power_on = True
         mode = "Offline (Last Known)"
         
+        if not status.get('success'):
+            failures.append(
+                f"{location}: {status.get('Payload') or status.get('msg') or 'no data'}")
+
         if status.get('success') and 'result' in status:
             mode = "Online"
             # Extract data based on known codes
@@ -119,7 +131,7 @@ async def fetch_tuya_data_all():
             ])
 
     save_cache(cache)
-    return results, None
+    return results, ('; '.join(failures) if failures else None)
 
 if __name__ == "__main__":
     import asyncio
