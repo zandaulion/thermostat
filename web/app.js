@@ -144,10 +144,28 @@ async function loadHistory() {
   drawChart();
 }
 
-const W = 720, H = 300, PAD = { l: 38, r: 12, t: 12, b: 24 };
+/* The viewBox is measured from the element rather than fixed, and the SVG no
+   longer stretches: with preserveAspectRatio="none" and a 720-wide box, a
+   360px portrait screen squashed everything horizontally by 2x -- including
+   the axis text, which is why the labels were hard to read. */
+function chartGeometry(svg) {
+  const w = Math.max(280, Math.round(svg.clientWidth || 720));
+  const h = Math.round(Math.min(300, Math.max(200, w * 0.52)));
+  return {
+    W: w,
+    H: h,
+    // Room for the widest y label, and for x labels that must not collide.
+    PAD: { l: 34, r: 10, t: 10, b: 26 },
+    ticks: w < 380 ? 2 : w < 560 ? 3 : 5,
+    gridY: h < 240 ? 3 : 4,
+  };
+}
 
 function drawChart() {
   const svg = $('chart');
+  const { W, H, PAD, ticks, gridY } = chartGeometry(svg);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('height', H);
   const pts = state.points;
   if (!pts.length) {
     svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle"
@@ -180,13 +198,12 @@ function drawChart() {
     }
   });
 
-  const gridY = 4, grid = [], labels = [];
+  const grid = [], labels = [];
   for (let i = 0; i <= gridY; i++) {
     const v = y0 + (i / gridY) * (y1 - y0), y = Y(v);
     grid.push(`<line class="grid" x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W - PAD.r}" y2="${y.toFixed(1)}"/>`);
     labels.push(`<text class="axis" x="4" y="${(y + 4).toFixed(1)}">${v.toFixed(1)}</text>`);
   }
-  const ticks = 4;
   for (let i = 0; i <= ticks; i++) {
     const t = x0 + (i / ticks) * (x1 - x0);
     const anchor = i === 0 ? 'start' : i === ticks ? 'end' : 'middle';
@@ -223,16 +240,18 @@ function drawChart() {
     + (bands ? `<span><i style="background:var(--heat);opacity:.5"></i>încălzire pornită</span>` : '')
     + (hum ? `<span><i style="background:var(--hum)"></i>umiditate</span>` : '');
 
-  attachCursor(svg, pts, xs, X);
+  attachCursor(svg, pts, xs, X, PAD, H);
 }
 
 /* Drag anywhere on the chart to read the value at that moment. */
-function attachCursor(svg, pts, xs, X) {
+function attachCursor(svg, pts, xs, X, PAD, H) {
   const cursor = svg.querySelector('#cursor');
   const readout = $('readout');
   const at = (evt) => {
     const r = svg.getBoundingClientRect();
-    const cx = ((evt.touches ? evt.touches[0].clientX : evt.clientX) - r.left) / r.width * W;
+    const vb = svg.viewBox.baseVal;
+    const cx = ((evt.touches ? evt.touches[0].clientX : evt.clientX) - r.left)
+               / r.width * vb.width;
     let best = 0, bd = Infinity;
     for (let i = 0; i < pts.length; i++) {
       const d = Math.abs(X(xs[i]) - cx);
@@ -255,6 +274,14 @@ function attachCursor(svg, pts, xs, X) {
   svg.ontouchmove = (e) => { at(e); };
   svg.ontouchend = hide;
 }
+
+let resizeTimer = null;
+const onResize = () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (state.points.length) drawChart(); }, 150);
+};
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', onResize);
 
 /* --------------------------------------------------------------- push --- */
 const b64ToBytes = (b64) => {

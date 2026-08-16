@@ -76,9 +76,10 @@ h2{font-size:.76rem;margin:0;text-transform:uppercase;letter-spacing:.08em;
   border-color:var(--accent);color:var(--accent)}
 .ranges .chip{font-variant-numeric:tabular-nums}
 .chart-wrap{position:relative;margin-top:4px}
-#chart{width:100%;height:300px;display:block;touch-action:pan-y}
+#chart{width:100%;display:block;touch-action:pan-y}
 .grid{stroke:var(--border);stroke-width:1}
-.axis{fill:var(--muted);font-size:11px}
+/* Now that the SVG is not stretched, this is a real pixel size. */
+.axis{fill:var(--muted);font-size:12px}
 .serie{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .heatband{fill:var(--heat);opacity:.13}
 .humline{fill:none;stroke:var(--hum);stroke-width:1.5;stroke-dasharray:4 3;opacity:.75}

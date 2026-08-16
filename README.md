@@ -72,7 +72,12 @@ gets muted, and a muted channel is worth nothing.
 Access is per-device by invite — no shared password, and notifications can be
 targeted. `./admin.sh invite "Ana"` mints one.
 
-Charts are drawn client-side as plain SVG, one path per series. That drops
+Charts are drawn client-side as plain SVG, one path per series. The viewBox
+is measured from the element rather than fixed, and the SVG is never
+stretched — `preserveAspectRatio="none"` against a fixed-width viewBox
+squashes the axis text along with the drawing, which on a 360px phone meant
+labels compressed to half width. Tick count and height adapt to the
+available width instead. That drops
 `pandas`, `matplotlib` and `scipy` from the web image entirely — they remain
 only for the Discord bot's server-rendered PNGs.
 
