@@ -21,6 +21,8 @@ const api = (path, body, method) =>
     return data;
   });
 
+const LAST_LOCATION = 'th-last-location';
+
 const RANGES = [
   { h: 24, label: '24 h' },
   { h: 24 * 7, label: '7 zile' },
@@ -103,7 +105,16 @@ async function loadNow() {
       </div>`;
   }).join('') : '<p class="empty">Nicio măsurătoare încă.</p>';
 
-  if (!state.location && rows.length) state.location = rows[0].location;
+  if (!state.location && rows.length) {
+    // Your own last choice wins, then the server's default, then whatever
+    // comes first -- so each person settles on their own view after one tap.
+    const known = (l) => l && rows.some((r) => r.location === l);
+    let saved = null;
+    try { saved = localStorage.getItem(LAST_LOCATION); } catch { /* private mode */ }
+    state.location = known(saved) ? saved
+      : known(data.default_location) ? data.default_location
+      : rows[0].location;
+  }
   renderChips(rows.map((r) => r.location));
 }
 
@@ -117,7 +128,11 @@ function renderChips(locs) {
   ).join('');
 
   $('loc-chips').querySelectorAll('[data-loc]').forEach((b) =>
-    b.addEventListener('click', () => { state.location = b.dataset.loc; loadHistory(); }));
+    b.addEventListener('click', () => {
+      state.location = b.dataset.loc;
+      try { localStorage.setItem(LAST_LOCATION, state.location); } catch { /* ignore */ }
+      loadHistory();
+    }));
   $('loc-chips').querySelectorAll('[data-hum]').forEach((b) =>
     b.addEventListener('click', () => { state.showHumidity = !state.showHumidity; drawChart(); renderChips(locs); }));
   $('range-chips').querySelectorAll('[data-h]').forEach((b) =>

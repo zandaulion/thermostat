@@ -144,7 +144,12 @@ async def now(device: dict = Depends(current_device)):
         age = n - datetime.fromisoformat(r["ts"])
         r["age_minutes"] = int(age.total_seconds() // 60)
         r["stale"] = age > stale_after
-    return {"readings": rows, "thresholds": {
+    return {"readings": rows,
+            # Which location to show first. Configurable rather than
+            # hardcoded, since which one matters most is a property of the
+            # household, not of the code.
+            "default_location": os.getenv("DEFAULT_LOCATION", "").strip() or None,
+            "thresholds": {
         "cold_c": alerts.COLD_C, "hot_c": alerts.HOT_C,
         "stuck_hours": alerts.STUCK_HOURS,
         "silent_minutes": alerts.SILENT_MINUTES,

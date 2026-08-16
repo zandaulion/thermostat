@@ -101,6 +101,13 @@ readings database, the VAPID key, and the Tuya token cache. **The VAPID key
 must survive rebuilds** — regenerating it silently invalidates every push
 subscription already granted.
 
+### Which location opens first
+
+`DEFAULT_LOCATION` decides, because which property matters most is a
+property of the household rather than of the code. After anyone taps a
+different one it is remembered in their browser, so each viewer settles on
+their own without affecting the others.
+
 ### Pushing readings in
 
 Polling a vendor's cloud makes the app hostage to that vendor's pricing —
