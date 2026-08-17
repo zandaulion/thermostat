@@ -70,7 +70,10 @@ not one per poll, and recovery is reported once. A channel that repeats itself
 gets muted, and a muted channel is worth nothing.
 
 Access is per-device by invite — no shared password, and notifications can be
-targeted. `./admin.sh invite "Ana"` mints one.
+targeted. `./admin.sh invite "Ana"` mints one, or use
+[admin-console](https://github.com/zandaulion/admin-console), the graphical
+console that fronts every app behind this invite mechanism and therefore lives
+in none of their repos.
 
 Charts are drawn client-side as plain SVG, one path per series. The viewBox
 is measured from the element rather than fixed, and the SVG is never
