@@ -24,6 +24,9 @@ usage: ./admin.sh <command>
   revoke <id>        lock a device out
   unrevoke <id>      let it back in
   forget <id>        delete a device
+  name <id> <label>  relabel a device
+  prune              delete every used and expired invite
+  prune-devices      delete every revoked device
   poll               run a collection cycle now
   source <name> <location> [room]
                      register a push source (Shelly etc); prints its token once
@@ -44,6 +47,9 @@ case "${1:-}" in
   revoke)   post "/api/admin/devices/${2:?id}/revoke" '{"revoked":true}' | j ;;
   unrevoke) post "/api/admin/devices/${2:?id}/revoke" '{"revoked":false}' | j ;;
   forget)   curl -fsS --max-time 15 -X DELETE "$API/api/admin/devices/${2:?id}" | j ;;
+  name)     post "/api/admin/devices/${2:?id}/label" "{\"label\":\"${3:?label}\"}" | j ;;
+  prune)    post /api/admin/invites/prune | j ;;
+  prune-devices) post /api/admin/devices/prune | j ;;
   poll)     post /api/admin/poll | j ;;
   source)
     post /api/admin/sources \
