@@ -71,7 +71,7 @@ gets muted, and a muted channel is worth nothing.
 
 Access is per-device by invite — no shared password, and notifications can be
 targeted. `./admin.sh invite "Ana"` mints one, or use
-[admin-console](https://github.com/zandaulion/admin-console), the graphical
+[pwa-invite-console](https://github.com/zandaulion/pwa-invite-console), the graphical
 console that fronts every app behind this invite mechanism and therefore lives
 in none of their repos.
 
