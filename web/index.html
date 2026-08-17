@@ -39,6 +39,17 @@
         <button class="btn" type="submit" id="btn-activate">Activează</button>
       </form>
       <p class="err" id="gate-err" hidden></p>
+      <div class="warn" id="gate-inapp" hidden>
+        <strong>Ai deschis pagina în browserul din WhatsApp.</strong>
+        Acesta are cookie-uri proprii, așa că aplicația instalată ulterior
+        nu va fi autentificată. Continuă în browserul propriu-zis — codul
+        te însoțește.
+        <div class="warn-actions">
+          <a class="btn" id="open-chrome" href="#" hidden>Deschide în Chrome</a>
+          <button class="btn ghost" id="copy-code" type="button">Copiază codul</button>
+        </div>
+        <p class="warn-note" id="inapp-note"></p>
+      </div>
       <p class="hint">
         <strong>Pe iPhone:</strong> adaugă întâi pagina pe ecranul principal
         (Distribuie → Adaugă la ecranul principal), apoi deschide-o de acolo și

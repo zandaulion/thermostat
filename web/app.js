@@ -356,10 +356,13 @@ $('btn-test').addEventListener('click', async () => {
 
 /* ------------------------------------------------------------- install -- */
 let installPrompt = null;
+/* Session-scoped: while the app is still in a browser the offer returns
+   each launch, since notifications and the offline shell both want it on
+   the home screen. The dismissal only clears it for now. */
 const DISMISSED = 'th-install-dismissed';
 function refreshInstallBar() {
   const bar = $('install');
-  if (standalone() || localStorage.getItem(DISMISSED)) { bar.hidden = true; return; }
+  if (standalone() || sessionStorage.getItem(DISMISSED)) { bar.hidden = true; return; }
   if (installPrompt) { $('btn-install').hidden = false; bar.hidden = false; }
   else if (isIOS()) {
     $('btn-install').hidden = true;
@@ -382,13 +385,72 @@ $('btn-install').addEventListener('click', async () => {
   if (outcome !== 'accepted') { installPrompt = p; refreshInstallBar(); }
 });
 $('btn-install-dismiss').addEventListener('click', () => {
-  try { localStorage.setItem(DISMISSED, '1'); } catch { /* private mode */ }
+  try { sessionStorage.setItem(DISMISSED, '1'); } catch { /* private mode */ }
   $('install').hidden = true;
 });
 
 /* ---------------------------------------------------------- gate / boot -- */
+/* Android WebView reports "; wv)"; the big chat apps ship their own browser.
+   Either way the cookie jar is separate from Chrome's, so registering inside
+   one strands the credential where the installed PWA can never read it. */
+function inAppBrowser() {
+  const ua = navigator.userAgent || '';
+  return /\bwv\b/.test(ua)
+    || /(FBAN|FBAV|Instagram|Line\/|WhatsApp|Snapchat|Messenger)/i.test(ua);
+}
+
+const isAndroid = () => /Android/i.test(navigator.userAgent || '');
+
+async function copyText(text, btn) {
+  let ok = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text); ok = true;
+    }
+  } catch { ok = false; }
+  if (!ok) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, text.length);
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    document.body.removeChild(ta);
+  }
+  if (btn) {
+    const was = btn.textContent;
+    btn.textContent = ok ? 'Copiat' : 'Selectează manual';
+    setTimeout(() => { btn.textContent = was; }, 1800);
+  }
+}
+
+function setupInApp(code) {
+  const box = $('gate-inapp');
+  box.hidden = !inAppBrowser();
+  if (box.hidden) return;
+
+  const url = `${location.origin}/i/${encodeURIComponent(code || '')}`;
+  const chrome = $('open-chrome');
+  if (isAndroid() && code) {
+    // Navigating to intent:// hands the URL to Chrome. Android-only; there is
+    // no equivalent on iOS, where the instructions below are the whole answer.
+    chrome.href = 'intent://' + url.replace(/^https?:\/\//, '')
+      + '#Intent;scheme=https;package=com.android.chrome;'
+      + 'S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
+    chrome.hidden = false;
+  }
+  $('inapp-note').textContent = isAndroid()
+    ? 'În Chrome: instalează aplicația din meniul ⋮, deschide-o de pe ecranul '
+      + 'principal, apoi introdu codul. Poți activa de mai multe ori în prima '
+      + 'oră, deci o atingere aici nu se pierde.'
+    : `Deschide ${location.host} în Safari, adaugă pagina pe ecranul `
+      + 'principal, deschide-o de acolo, apoi introdu codul.';
+  $('copy-code').onclick = () => copyText(code || $('invite-code').value, $('copy-code'));
+}
+
 function showGate(prefill) {
   $('gate').hidden = false; $('app').hidden = true;
+  setupInApp(prefill);
   if (prefill) {
     $('invite-code').value = prefill;
     $('gate-title').textContent = 'Activează acest dispozitiv';

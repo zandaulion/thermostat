@@ -6,6 +6,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEST="${DEST:-/var/www/thermo}"
+# The admin page is served only on the tailnet listener, so it is deployed
+# to its own root -- never under the public one.
+ADMIN_DEST="${ADMIN_DEST:-/var/www/thermo-admin}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 VERSION="$(find "$ROOT/web" -type f -exec sha256sum {} + | sort -k2 | sha256sum | cut -c1-12)"
@@ -13,6 +16,9 @@ VERSION="$(find "$ROOT/web" -type f -exec sha256sum {} + | sort -k2 | sha256sum 
 sudo mkdir -p "$DEST"
 sudo chown "$(id -un):$(id -gn)" "$DEST"
 rsync -a --delete "$ROOT/web"/ "$DEST"/
+sudo mkdir -p "$ADMIN_DEST"
+sudo chown "$(id -un):$(id -gn)" "$ADMIN_DEST"
+rsync -a --delete "$ROOT/admin"/ "$ADMIN_DEST"/
 # Stamp every reference, not just the service worker.
 grep -rl __BUILD_VERSION__ "$DEST" | xargs -r sed -i "s/__BUILD_VERSION__/${VERSION}/g"
 sudo restorecon -R "$DEST" 2>/dev/null || true
