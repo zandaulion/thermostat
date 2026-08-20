@@ -5,7 +5,10 @@ const VERSION = '__BUILD_VERSION__';
 const SHELL_CACHE = 'thermo-shell-' + VERSION;
 const API_CACHE = 'thermo-api';
 const SHELL = ['/', '/index.html', '/app.css', '/app.js', '/manifest.webmanifest',
-               '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+               '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png',
+               // Precached: a push can arrive offline, and a badge that 404s
+               // leaves Android drawing the Chrome logo instead.
+               '/icons/badge-96.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -57,7 +60,7 @@ self.addEventListener('push', (e) => {
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = {}; }
   e.waitUntil(self.registration.showNotification(d.title || 'Termometru', {
     body: d.body || '', tag: d.tag || 'thermo', renotify: true,
-    icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', data: d,
+    icon: '/icons/icon-192.png', badge: '/icons/badge-96.png', data: d,
     vibrate: d.priority === 'high' ? [140, 70, 140] : [110],
   }));
 });

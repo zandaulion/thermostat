@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <!--
+    Notification badge. Android draws this from the alpha channel alone, as a
+    flat silhouette in the system tint, so it must be a transparent-background
+    shape rather than the app icon — a full-colour rounded square is opaque
+    edge to edge and comes out as a featureless block.
+
+    A thermometer reduced to bulb, stem and three scale marks: enough to read
+    at ~18dp, and nothing that closes up when it shrinks.
+  -->
+  <g fill="#FFFFFF">
+    <!-- Stem, running into the bulb so the two read as one object. -->
+    <rect x="36" y="12" width="18" height="56" rx="9"/>
+
+    <!-- Bulb. -->
+    <circle cx="45" cy="70" r="17"/>
+
+    <!-- Scale marks, kept clear of the stem. -->
+    <rect x="62" y="22" width="18" height="7" rx="3.5"/>
+    <rect x="62" y="38" width="18" height="7" rx="3.5"/>
+    <rect x="62" y="54" width="18" height="7" rx="3.5"/>
+  </g>
+</svg>
