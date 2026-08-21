@@ -1,0 +1,13 @@
+# The root Dockerfile uses `COPY . .`, so anything here that is not excluded
+# gets baked into the image. Deployment secrets must not travel with it.
+.env
+.admin.env
+devices.json
+
+.git/
+__pycache__/
+*.pyc
+venv/
+data/
+temp_log.csv
+temp_plot.png
