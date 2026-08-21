@@ -2,7 +2,7 @@ import tinytuya
 import os
 import json
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -41,6 +41,29 @@ async def fetch_tuya_data_all():
 
     c = tinytuya.Cloud(apiRegion=region, apiKey=api_key, apiSecret=api_secret, uid=uid)
     cache = get_cache()
+
+    def device_liveness(dev_id):
+        """-> (online, reported_at_iso).
+
+        getstatus() succeeds for a device that has been unplugged for days --
+        Tuya's cloud keeps serving the last datapoints it ever received, with
+        no marker that they are historical. The device record is the only
+        place that carries the truth, so ask it rather than inferring
+        liveness from "the API answered".
+        """
+        try:
+            r = c.cloudrequest("/v1.0/devices/%s" % dev_id)
+        except Exception:
+            return None, None
+        if not isinstance(r, dict) or not r.get("success"):
+            return None, None
+        res = r.get("result") or {}
+        online = res.get("online")
+        seen = res.get("update_time")
+        iso = None
+        if isinstance(seen, (int, float)) and seen > 0:
+            iso = datetime.fromtimestamp(seen, timezone.utc).isoformat(timespec="seconds")
+        return (bool(online) if online is not None else None), iso
     
     results = []
     # A device we cannot read must be reported, not silently omitted. An
@@ -57,7 +80,8 @@ async def fetch_tuya_data_all():
         name = dev_conf['name']
         
         status = c.getstatus(dev_id)
-        
+        online, reported_at = device_liveness(dev_id)
+
         temp = None
         hum = None
         battery = None
@@ -69,8 +93,14 @@ async def fetch_tuya_data_all():
             failures.append(
                 f"{location}: {status.get('Payload') or status.get('msg') or 'no data'}")
 
+        # `online is None` means we could not reach the device record; fall
+        # back to the old behaviour rather than declaring a live sensor dead.
+        if online is False:
+            failures.append(f"{location}: device offline since {reported_at or 'unknown'}")
+
         if status.get('success') and 'result' in status:
-            mode = "Online"
+            if online is not False:
+                mode = "Online"
             # Extract data based on known codes
             for item in status['result']:
                 code = item['code']
@@ -100,7 +130,9 @@ async def fetch_tuya_data_all():
                     "setpoint": setpoint,
                     "power_on": power_on,
                     "battery": battery,
-                    "timestamp": timestamp
+                    # The sensor's own clock where Tuya gives us one. Storing
+                    # the run clock here made every cached value look fresh.
+                    "timestamp": reported_at or timestamp
                 }
         else:
             # Fetch from cache if available
@@ -111,11 +143,14 @@ async def fetch_tuya_data_all():
                 setpoint = cached.get("setpoint")
                 power_on = cached.get("power_on", True)
                 battery = cached.get("battery")
+                reported_at = reported_at or cached.get("timestamp")
         
         if temp is not None:
             # Infer heating status for thermostats (devices with a setpoint)
             status_val = mode
-            if setpoint != "":
+            # An offline thermostat must keep saying so: inferring On/Off from
+            # its last-known temperature would paint a dead device as healthy.
+            if setpoint != "" and mode == "Online":
                 if not power_on:
                     status_val = "Off" # Or "Power Off"
                 else:
@@ -138,7 +173,8 @@ async def fetch_tuya_data_all():
                 hum if hum is not None else "",
                 setpoint,
                 status_val,
-                battery if battery is not None else ""
+                battery if battery is not None else "",
+                reported_at or ""
             ])
 
     save_cache(cache)

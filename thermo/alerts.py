@@ -88,6 +88,45 @@ async def _transition(key: str, firing: bool) -> str | None:
     return "clear"
 
 
+# Statuses that mean the upstream cloud is vouching for the device being
+# reachable right now. "On"/"Off" are heating states, which the fetcher only
+# infers for a device it is actually hearing from.
+LIVENESS_KNOWN = {"online", "on", "off"}
+
+
+def sensor_age_minutes(row: dict, now: datetime) -> float | None:
+    """Age against the sensor's own clock, falling back to our write time."""
+    ts = row.get("reported_at") or row.get("ts")
+    if not ts:
+        return None
+    return (now - datetime.fromisoformat(ts)).total_seconds() / 60
+
+
+def is_offline(row: dict) -> bool:
+    return (row.get("status") or "").strip().lower().startswith("offline")
+
+
+def is_silent(row: dict, now: datetime) -> bool:
+    """A sensor we have stopped hearing from.
+
+    Sources differ in what they can tell us, so this splits three ways:
+
+      * the cloud says the device is offline -- authoritative, and true the
+        moment it is reported rather than after a silence window;
+      * the cloud vouches for it being online -- trust that over age. A
+        battery T&H sensor legitimately goes hours between datapoints, and
+        timing those out would cry wolf on a perfectly healthy sensor;
+      * no liveness information at all, which is every push source -- fall
+        back to the age timer, where arrival time really is report time.
+    """
+    if is_offline(row):
+        return True
+    if (row.get("status") or "").strip().lower() in LIVENESS_KNOWN:
+        return False
+    age = sensor_age_minutes(row, now)
+    return age is not None and age > SILENT_MINUTES
+
+
 def _hours_on(rows: list[dict]) -> float:
     """How long the most recent contiguous run of Status='On' has lasted."""
     on = 0.0
@@ -110,18 +149,23 @@ async def evaluate(latest: list[dict], recent: dict[str, list[dict]]) -> list[di
     for row in latest:
         loc = row["location"]
         temp = row.get("temperature")
-        ts = row.get("ts")
-
         # --- sensor gone quiet ------------------------------------------
-        silent = False
-        if ts:
-            age = (now - datetime.fromisoformat(ts)).total_seconds() / 60
-            silent = age > SILENT_MINUTES
+        silent = is_silent(row, now)
         edge = await _transition(f"silent:{loc}", silent)
         if edge == "fire":
+            age = sensor_age_minutes(row, now)
+            if age is None:
+                since = "Nicio măsurătoare recentă."
+            elif age < 120:
+                since = f"Nicio măsurătoare de {int(age)} de minute."
+            elif age < 48 * 60:
+                since = f"Nicio măsurătoare de {int(age // 60)} de ore."
+            else:
+                since = f"Nicio măsurătoare de {int(age // 1440)} zile."
             out.append({
-                "title": f"{loc}: senzorul tace",
-                "body": f"Nicio măsurătoare de peste {SILENT_MINUTES} de minute.",
+                "title": (f"{loc}: senzor deconectat" if is_offline(row)
+                          else f"{loc}: senzorul tace"),
+                "body": since,
                 "tag": f"silent-{loc}", "priority": "high",
             })
         elif edge == "clear":

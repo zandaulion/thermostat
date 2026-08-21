@@ -19,7 +19,11 @@ POLL_SECONDS = int(os.getenv("POLL_SECONDS", "600"))
 def _to_row(rec: list, now: str) -> dict:
     """The fetchers return the CSV row order:
     Timestamp, Location, Room, Device, Zone, Temperature, Humidity,
-    Setpoint, Status."""
+    Setpoint, Status, Battery, ReportedAt.
+
+    `ts` stays the poll time so the series keeps a regular cadence and the
+    unique index still deduplicates. `reported_at` is the sensor's own clock,
+    and is what staleness must be measured against."""
     def num(v):
         try:
             return float(v)
@@ -37,6 +41,7 @@ def _to_row(rec: list, now: str) -> dict:
         "status": (str(rec[8]) if len(rec) > 8 and rec[8] is not None else None),
         # Appended later than the rest, so older callers may not send it.
         "battery": num(rec[9]) if len(rec) > 9 else None,
+        "reported_at": (str(rec[10]) or None) if len(rec) > 10 and rec[10] else None,
     }
 
 

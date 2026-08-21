@@ -11,7 +11,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import (Body, Depends, FastAPI, Header, HTTPException, Query,
                      Request, Response)
@@ -138,12 +138,15 @@ async def health():
 @app.get("/api/now")
 async def now(device: dict = Depends(current_device)):
     rows = await store.latest()
-    stale_after = timedelta(minutes=alerts.SILENT_MINUTES)
     n = datetime.now(timezone.utc)
     for r in rows:
-        age = n - datetime.fromisoformat(r["ts"])
-        r["age_minutes"] = int(age.total_seconds() // 60)
-        r["stale"] = age > stale_after
+        # `ts` only says when we last wrote a row, which a cloud that keeps
+        # serving a dead device's last-known values refreshes forever. Age and
+        # staleness both come from the sensor's own clock, via the same rules
+        # the alerting uses -- the tile and the notification must not disagree.
+        r["age_minutes"] = int(alerts.sensor_age_minutes(r, n) or 0)
+        r["offline"] = alerts.is_offline(r)
+        r["stale"] = alerts.is_silent(r, n)
     return {"readings": rows,
             # Which location to show first. Configurable rather than
             # hardcoded, since which one matters most is a property of the
@@ -390,6 +393,8 @@ async def ingest(request: Request):
         "setpoint": _first_float(data, "setpoint", "target"),
         "status": (data.get("status") or "").strip() or None,
         "battery": _first_float(data, "batt", "battery", "battery_percent"),
+        # A push source speaks for itself, so arrival time is report time.
+        "reported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     written = await store.insert([row])
     log.info("ingest from %s: %s %.1f°C", src["name"], row["location"],

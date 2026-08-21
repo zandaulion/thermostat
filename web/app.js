@@ -42,6 +42,17 @@ const fmtTime = (iso, long) => new Date(iso).toLocaleString('ro-RO',
 /* ------------------------------------------------------------- readings -- */
 /* A battery outline whose fill tracks the charge, so it reads at a glance
    without needing the number beside it. */
+/* A sensor that died days ago used to read "acum 2867 min". Once age is
+   measured against the sensor's own clock it can be arbitrarily large, so it
+   needs a unit that stays readable at that range. */
+function formatAge(min) {
+  if (min == null || !isFinite(min)) return 'fără dată';
+  if (min < 60) return `acum ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 48) return `acum ${h} h`;
+  return `acum ${Math.round(h / 24)} zile`;
+}
+
 function batteryIcon(pct) {
   const w = Math.max(1, Math.round((Math.max(0, Math.min(100, pct)) / 100) * 12));
   return `<svg viewBox="0 0 22 12" width="17" height="10" aria-hidden="true">
@@ -84,8 +95,7 @@ async function loadNow() {
     const bits = [];
     if (r.humidity != null) bits.push(`${r.humidity.toFixed(0)}% umiditate`);
     if (r.setpoint != null) bits.push(`prag ${r.setpoint.toFixed(1)}°`);
-    bits.push(r.age_minutes < 60 ? `acum ${r.age_minutes} min`
-                                 : `acum ${Math.round(r.age_minutes / 60)} h`);
+    bits.push(formatAge(r.age_minutes));
 
     // Several badges can apply at once -- a silent sensor with a flat battery
     // is the most likely combination, and is exactly when both matter.
@@ -94,10 +104,13 @@ async function loadNow() {
       badges.push(`<span class="badge batt" title="Baterie ${r.battery.toFixed(0)}%">`
         + batteryIcon(r.battery) + `${r.battery.toFixed(0)}%</span>`);
     }
-    if (r.stale) badges.push('<span class="badge stale">tace</span>');
+    // "deconectat" and "tace" are different faults: the first is the cloud
+    // telling us the device is gone, the second is our own silence timer.
+    if (r.offline) badges.push('<span class="badge stale">deconectat</span>');
+    else if (r.stale) badges.push('<span class="badge stale">tace</span>');
     else if (heating) badges.push('<span class="badge heat">încălzire</span>');
 
-    return `<div class="tile${r.stale ? ' stale' : ''}">
+    return `<div class="tile${(r.stale || r.offline) ? ' stale' : ''}">
         ${badges.length ? `<div class="badges">${badges.join('')}</div>` : ''}
         <div class="loc">${esc(r.location)}</div>
         <p class="t ${tempClass(t)}">${t == null ? '—' : t.toFixed(1)}<small>°C</small></p>

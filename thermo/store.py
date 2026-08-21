@@ -27,7 +27,12 @@ CREATE TABLE IF NOT EXISTS readings (
     humidity    REAL,
     setpoint    REAL,
     status      TEXT,
-    battery     REAL
+    battery     REAL,
+    -- When the sensor itself last reported, as distinct from `ts`, which is
+    -- when we wrote the row. The two diverge when an upstream cloud keeps
+    -- serving a dead device's last-known values: Tuya kept answering for days
+    -- after a sensor went offline, and every poll looked fresh.
+    reported_at TEXT
 );
 CREATE INDEX IF NOT EXISTS readings_loc_ts ON readings(location, ts);
 CREATE INDEX IF NOT EXISTS readings_ts ON readings(ts);
@@ -78,6 +83,9 @@ def init() -> None:
         if "battery" not in cols:
             con.execute("ALTER TABLE readings ADD COLUMN battery REAL")
             log.info("migrated readings: added battery")
+        if "reported_at" not in cols:
+            con.execute("ALTER TABLE readings ADD COLUMN reported_at TEXT")
+            log.info("migrated readings: added reported_at")
 
 
 def _insert_blocking(rows: list[dict]) -> int:
@@ -87,9 +95,9 @@ def _insert_blocking(rows: list[dict]) -> int:
         cur = con.executemany(
             """INSERT OR IGNORE INTO readings
                  (ts, location, room, device, zone, temperature, humidity,
-                  setpoint, status, battery)
+                  setpoint, status, battery, reported_at)
                VALUES (:ts, :location, :room, :device, :zone, :temperature,
-                       :humidity, :setpoint, :status, :battery)""",
+                       :humidity, :setpoint, :status, :battery, :reported_at)""",
             rows,
         )
         return cur.rowcount
