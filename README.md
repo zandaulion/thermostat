@@ -25,13 +25,33 @@ plain CSV.
 - Docker and Docker Compose installed on your system.
 
 ### 2. Configuration
-Create a `.env` file in the root directory:
+Two files, neither of them tracked by Git.
+
+**Credentials** — a `.env` file in the root directory:
 ```env
 SALUS_EMAIL="your_email@example.com"
 SALUS_PASSWORD="your_password"
 DISCORD_TOKEN="your_discord_bot_token"
 TZ="Europe/Bucharest" # Set your local timezone
 ```
+
+**Device inventory** — `devices.json`, which maps cloud device ids to the
+rooms they sit in:
+```bash
+cp devices.example.json devices.json   # then fill it in
+```
+It is deployment data rather than source: it names your rooms and carries
+your device ids, so the repository ships only the example. The fetchers look
+for it in this order, first hit wins:
+
+| Order | Location | Used by |
+| ----- | -------- | ------- |
+| 1 | `$DEVICES_FILE` | explicit override, tests |
+| 2 | `$DATA_DIR/devices.json` | the deployed container (`/data/devices.json`) |
+| 3 | `./devices.json` | a checkout run from the working tree |
+
+If none of them exists the fetchers raise rather than returning an empty
+inventory — see [Failure modes](#-failure-modes-worth-knowing) for why.
 
 ### 3. Start the Application
 Build and start the containers using Docker Compose:
@@ -98,11 +118,22 @@ systemctl --user daemon-reload && systemctl --user start thermo.service
 ./deploy/deploy.sh            # publish the PWA to /var/www/thermo
 ```
 
+The container reads its inventory from the volume, so put it there once —
+`podman unshare` because the volume is owned by the container's user, not
+yours:
+
+```bash
+VOL=$(podman volume inspect thermo-data --format '{{.Mountpoint}}')
+podman unshare cp devices.json "$VOL/devices.json"
+podman unshare chown 10003:10003 "$VOL/devices.json"
+podman unshare chmod 600 "$VOL/devices.json"
+```
+
 It listens on `127.0.0.1:8093`; put a reverse proxy in front to reach it from
 elsewhere. Everything mutable lives in the named volume `thermo-data`: the
-readings database, the VAPID key, and the Tuya token cache. **The VAPID key
-must survive rebuilds** — regenerating it silently invalidates every push
-subscription already granted.
+readings database, the VAPID key, the Tuya token cache, and `devices.json`.
+**The VAPID key must survive rebuilds** — regenerating it silently
+invalidates every push subscription already granted.
 
 ### Which location opens first
 
@@ -159,6 +190,9 @@ If you prefer to run commands manually through the container:
   collects without writing, so the web app and the CSV logger share one code
   path rather than two that can drift.
 - `read_temp.py` / `tuya_temp.py`: the Salus and Tuya cloud clients.
+- `devices_config.py`: resolves where `devices.json` lives, so both fetchers
+  agree on one answer.
+- `devices.example.json`: template for the untracked `devices.json`.
 - `plot_temp.py`: Logic for generating the Matplotlib graph (Discord only).
 - `discord_bot.py`: The Discord bot interface.
 - `thermo/`: the web app — storage, poller, alert rules, API.
@@ -169,7 +203,7 @@ If you prefer to run commands manually through the container:
 
 ## ⚠️ Failure modes worth knowing
 
-A monitoring app that hides its own blindness is worse than none. Three ways
+A monitoring app that hides its own blindness is worse than none. Four ways
 this one used to do exactly that, all now fixed:
 
 - **A source that fails while another succeeds.** `fetch_all()` caught the
@@ -181,8 +215,34 @@ this one used to do exactly that, all now fixed:
   devices are now named in the error.
 - **Stale values that look live.** The dashboard shows the last known reading
   per location, so an expired subscription leaves four confident numbers on
-  screen. Readings older than `ALERT_SILENT_MINUTES` are marked stale in the
-  UI and raise an alert.
+  screen. Sensors that stop reporting are now marked in the UI and raise an
+  alert — see below for how that is decided.
+- **An empty device inventory.** A missing `devices.json` used to yield an
+  empty config, which made every fetcher return "no devices, no error" —
+  indistinguishable from a healthy poll of an empty house. It now raises, and
+  the poller surfaces the exception through `/api/health`.
+
+### How a dead sensor is detected
+
+Not by age alone, because that gets it wrong in both directions.
+
+A device cloud will happily serve a dead device's last readings forever. Tuya
+answered for five days after one sensor went offline, re-dating the same
+values on every poll, so the reading always looked minutes old. Liveness
+therefore comes from the device record (`online`, `update_time`), not from the
+fact that a status query succeeded.
+
+The opposite mistake is just as easy: a battery temperature/humidity sensor
+legitimately goes hours between datapoints, so timing it out on
+`ALERT_SILENT_MINUTES` would cry wolf on a perfectly healthy sensor. So:
+
+- the cloud reports the device **offline** → alert immediately;
+- the cloud vouches for it being **online** → trust that, whatever the age;
+- **no liveness information** (every push source) → fall back to the
+  `ALERT_SILENT_MINUTES` timer, where arrival time really is report time.
+
+Rows carry two clocks to make this possible: `ts` is when we wrote the row,
+and `reported_at` is when the sensor itself last spoke.
 
 Tuya's free **IoT Core trial lasts one month** and cannot be re-subscribed on
 the same account; past it, their pricing is enterprise-scale. When it lapses
@@ -196,7 +256,12 @@ device. Without that it silently stops deduplicating for any source that
 leaves them unset — which is most push sources.
 
 ## 🛡️ Security
-Your credentials in `.env` and the data in `data/` are automatically ignored by Git (via `.gitignore`) to prevent accidental exposure of your account details.
+`.gitignore` keeps three things out of the repository: your credentials
+(`.env`), the collected data (`data/`), and your device inventory
+(`devices.json`). The inventory matters as much as the other two — it names
+your rooms and lists your cloud device ids. The ids are not usable on their
+own, since the cloud APIs also want the key and secret from `.env`, but they
+describe your setup and there is no reason to publish them.
 
 ## 📜 License
 This project is for personal use and is not affiliated with Salus Controls.

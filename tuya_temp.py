@@ -2,6 +2,7 @@ import tinytuya
 import os
 import json
 from dotenv import load_dotenv
+from devices_config import load_devices
 from datetime import datetime, timezone
 
 load_dotenv()
@@ -32,8 +33,7 @@ async def fetch_tuya_data_all():
         return [], "Tuya credentials not fully set."
 
     # Load device config
-    with open("devices.json", 'r') as f:
-        config = json.load(f)
+    config = load_devices()
     
     tuya_devices = config.get("Tuya", [])
     if not tuya_devices:

@@ -14,7 +14,8 @@ RUN pip install --no-cache-dir -r requirements-web.txt
 
 # The web app reuses the existing fetchers rather than reimplementing the
 # quirks of two device clouds, so they ship alongside it.
-COPY log_temp.py read_temp.py tuya_temp.py devices.json ./
+# devices.json is deployment data, not source -- it lives on the volume.
+COPY log_temp.py read_temp.py tuya_temp.py devices_config.py ./
 COPY thermo ./thermo
 
 # Readings database, VAPID key, and the Tuya token cache.

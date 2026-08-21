@@ -1,0 +1,21 @@
+{
+  "Salus": {
+    "device_id": "0000000000000000",
+    "location": "Country House",
+    "room": "Hallway"
+  },
+  "Tuya": [
+    {
+      "id": "bf0000000000000000abcd",
+      "location": "Seaside Flat",
+      "room": "Living Room",
+      "name": "WiFi T&H Sensor"
+    },
+    {
+      "id": "bf1111111111111111efgh",
+      "location": "City Flat",
+      "room": "Living Room",
+      "name": "Heating Thermostat"
+    }
+  ]
+}

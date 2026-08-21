@@ -7,3 +7,7 @@ __pycache__/
 
 # Site-specific admin endpoint
 .admin.env
+
+# Device inventory: room names and cloud device ids, per-deployment.
+# Lives on the data volume; devices.example.json is the template.
+devices.json

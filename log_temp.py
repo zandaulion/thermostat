@@ -9,19 +9,16 @@ from dotenv import load_dotenv
 from pyit500.pyit500 import PyIt500
 from pyit500.auth import Auth
 from tuya_temp import fetch_tuya_data_all
+from devices_config import load_devices
 
 # Load credentials from .env file
 load_dotenv()
 
 LOG_FILE = os.environ.get("LOG_FILE", "temp_log.csv")
 INTERVAL_SECONDS = int(os.environ.get("INTERVAL_SECONDS", 600))
-DEVICES_FILE = "devices.json"
 
 def get_devices_config():
-    if os.path.exists(DEVICES_FILE):
-        with open(DEVICES_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+    return load_devices()
 
 async def fetch_all():
     """Collect readings from every configured source.
