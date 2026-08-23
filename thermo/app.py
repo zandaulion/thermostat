@@ -131,8 +131,19 @@ app = FastAPI(title="Termometru", default_response_class=ORJSONResponse,
 # --------------------------------------------------------------------------
 @app.get("/api/health")
 async def health():
+    # Offline sensors are listed separately from `last_poll.errors`: the poll
+    # itself succeeded, so they are not collection failures, but they are still
+    # the first thing worth seeing when the numbers on screen look wrong.
+    n = datetime.now(timezone.utc)
+    offline = [
+        {"location": r["location"],
+         "since": r.get("reported_at"),
+         "age_minutes": int(alerts.sensor_age_minutes(r, n) or 0)}
+        for r in await store.latest() if alerts.is_offline(r)
+    ]
     return {"ok": True, "last_poll": getattr(app.state, "last_poll", None),
-            "poll_seconds": POLL_SECONDS, **(await store.stats())}
+            "poll_seconds": POLL_SECONDS, "offline_sensors": offline,
+            **(await store.stats())}
 
 
 @app.get("/api/now")

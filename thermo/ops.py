@@ -67,8 +67,10 @@ class Flapper:
     are silent after the first and recovery is announced exactly once.
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, *, down: str, up: str) -> None:
         self.name = name
+        self.down = down     # what to say when the signal goes bad
+        self.up = up         # ... and when it comes back
         self.ok: bool | None = None
 
     async def set(self, ok: bool, detail: str = "") -> None:
@@ -80,21 +82,31 @@ class Flapper:
             return                       # healthy at startup is not news
         if ok:
             await send(
-                f"{self.name} răspunde din nou." + (f"\n{detail}" if detail else ""),
+                f"{self.name} {self.up}" + (f"\n{detail}" if detail else ""),
                 title=f"{APP_NAME}: revenit",
                 tags="white_check_mark",
                 priority="default",
             )
         else:
             await send(
-                f"{self.name} nu răspunde." + (f"\n{detail}" if detail else ""),
+                f"{self.name} {self.down}" + (f"\n{detail}" if detail else ""),
                 title=f"{APP_NAME}: problemă",
                 tags="rotating_light",
                 priority="high",
             )
 
 
-upstream = Flapper("Mersul trenurilor (CFR)")
+# Tracks whether a poll can read the device clouds at all -- Salus and Tuya.
+# It is deliberately *not* about what those clouds report: a sensor that is
+# switched off is a monitored condition with its own alert, not a failure of
+# the collector. Conflating the two would pin this permanently unhealthy and,
+# because it is edge-triggered, hide the next real outage behind a state it
+# never left.
+upstream = Flapper(
+    "Citirea senzorilor",
+    down="a eșuat.",
+    up="funcționează din nou.",
+)
 
 
 def fire(coro) -> None:
