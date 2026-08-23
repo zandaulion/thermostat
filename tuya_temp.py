@@ -95,8 +95,15 @@ async def fetch_tuya_data_all():
 
         # `online is None` means we could not reach the device record; fall
         # back to the old behaviour rather than declaring a live sensor dead.
+        #
+        # An offline device is NOT a collection failure. We read the cloud
+        # successfully; the cloud told us the sensor is unreachable. It travels
+        # in the row's Status, raises its own "senzor deconectat" alert, and is
+        # visible in /api/health. Putting it in `failures` would pin the
+        # operational health flag permanently unhealthy and, since that flag is
+        # edge-triggered, silence the next genuine outage.
         if online is False:
-            failures.append(f"{location}: device offline since {reported_at or 'unknown'}")
+            print(f"[{location}] device offline since {reported_at or 'unknown'}")
 
         if status.get('success') and 'result' in status:
             if online is not False:
