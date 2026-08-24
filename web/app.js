@@ -364,14 +364,19 @@ function drawChart() {
     }
   }
 
+  // Same colour this property has on its tile, its chip and the combined
+  // chart -- switching between the two views should not recolour the line.
+  const locColor = colorFor(state.location);
   svg.innerHTML = bands + grid.join('') + hum
-    + `<path class="serie" stroke="var(--accent)" d="${path}"/>`
+    + `<path class="serie" stroke="${locColor}" d="${path}"/>`
     + labels.join('')
     + `<line id="cursor" class="cursor" x1="0" y1="${PAD.t}" x2="0" y2="${H - PAD.b}" style="display:none"/>`;
 
+  // The swatch carries the property, the label carries the metric: the line
+  // is still "temperatură", it is just this property's temperature.
   $('legend').innerHTML =
-    `<span><i style="background:var(--accent)"></i>temperatură</span>`
-    + (bands ? `<span><i style="background:var(--heat);opacity:.5"></i>încălzire pornită</span>` : '')
+    `<span><i style="background:${locColor}"></i>temperatură</span>`
+    + (bands ? `<span><i class="band" style="background:var(--heat);opacity:.5"></i>încălzire pornită</span>` : '')
     + (hum ? `<span><i style="background:var(--hum)"></i>umiditate</span>` : '');
 
   attachCursor(svg, pts, xs, X, PAD, H);
