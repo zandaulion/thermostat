@@ -2,6 +2,13 @@
   --bg:#f5f7fb; --surface:#fff; --border:#e3e7f0; --text:#131722; --muted:#5d6579;
   --accent:#0284c7; --cold:#2563eb; --ok:#0f766e; --warm:#c2410c; --hot:#b91c1c;
   --heat:#f97316; --hum:#64748b;
+  /* Categorical series palette for the all-locations chart. Okabe-Ito, chosen
+     because the lines carry identity rather than magnitude: the semantic
+     cold/warm/hot tokens already mean "how hot", and reusing them here would
+     say a location is warm when it only means it is the third one. Safe for
+     the common forms of colour blindness. */
+  --s1:#0072b2; --s2:#d55e00; --s3:#009e73;
+  --s4:#cc79a7; --s5:#e69f00; --s6:#5b5ea6;
   --shadow:0 1px 2px rgba(16,20,40,.06), 0 10px 28px rgba(16,20,40,.07);
 }
 @media (prefers-color-scheme:dark){
@@ -9,6 +16,9 @@
     --bg:#0b1020; --surface:#151b2e; --border:#26304a; --text:#e9edf8; --muted:#9aa4bf;
     --accent:#38bdf8; --cold:#60a5fa; --ok:#5eead4; --warm:#fb923c; --hot:#fca5a5;
     --heat:#fb923c; --hum:#94a3b8;
+    /* Same hues, lifted so they hold against a dark ground. */
+    --s1:#5bb3e6; --s2:#ff9052; --s3:#3ddba4;
+    --s4:#f0a0c8; --s5:#f5c242; --s6:#9aa0e8;
     --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 28px rgba(0,0,0,.4);
   }
 }
@@ -84,6 +94,14 @@ h2{font-size:.76rem;margin:0;text-transform:uppercase;letter-spacing:.08em;
 .chip.on{background:color-mix(in srgb,var(--accent) 15%,transparent);
   border-color:var(--accent);color:var(--accent)}
 .ranges .chip{font-variant-numeric:tabular-nums}
+/* "toate" selects a mode rather than a place, so it reads as a switch: the
+   dotted edge separates it from the list of sensors beside it. */
+.chip.mode{border-style:dashed}
+.chip.mode.on{border-style:solid}
+/* Comparing four sensors makes the readout a small table, so the numbers have
+   to line up and it must not cover the lines it is describing. */
+.readout{max-width:60%}
+.readout span{font-variant-numeric:tabular-nums}
 .chart-wrap{position:relative;margin-top:4px}
 #chart{width:100%;display:block;touch-action:pan-y}
 .grid{stroke:var(--border);stroke-width:1}
