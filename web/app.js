@@ -22,6 +22,7 @@ const api = (path, body, method) =>
   });
 
 const LAST_LOCATION = 'th-last-location';
+const LAST_MODE = 'th-last-mode';        // 'all' | 'one'
 
 const RANGES = [
   { h: 24, label: '24 h' },
@@ -34,8 +35,14 @@ const state = {
   location: null, hours: 24, points: [], thresholds: {},
   showHumidity: false, sub: null,
   // Compare mode: every location on one set of axes. `series` is
-  // [{location, points, color}], one entry per sensor.
-  compare: false, series: [],
+  // [{location, points, color}], one entry per sensor. Defaults on -- the
+  // whole house at a glance is the more useful first screen, and picking a
+  // single property from there is one tap. The last choice is remembered.
+  compare: (() => {
+    try { return (localStorage.getItem(LAST_MODE) || 'all') === 'all'; }
+    catch { return true; }        // private mode
+  })(),
+  series: [],
   locations: [],          // sorted, stable -- drives colorFor()
 };
 
@@ -177,8 +184,18 @@ function renderChips(locs) {
   // "toate" is a mode, not a place, so it sits first and is styled as the
   // odd one out. Humidity is hidden while comparing: four humidity lines on a
   // second scale is not a comparison, it is a mess.
+  // The swatches preview what the mode does: one dot per property, in the
+  // colours they will appear in, overlapped so they read as a set rather than
+  // as four separate controls.
+  // Falls back to arrival order only until ensureLocations() has run; on the
+  // single-location path chips can render before the list is known.
+  const known = state.locations.length > 0;
+  const swatch = (known ? state.locations : uniq).slice(0, 5)
+    .map((l, i) => `<i style="background:${known ? colorFor(l)
+                       : SERIES_COLORS[i % SERIES_COLORS.length]}"></i>`).join('');
   $('loc-chips').innerHTML =
-    `<button class="chip mode${state.compare ? ' on' : ''}" data-all="1">toate</button>`
+    `<button class="chip mode${state.compare ? ' on' : ''}" data-all="1"
+       ><span class="dots">${swatch}</span>toate</button>`
     + uniq.map((l) =>
       `<button class="chip${!state.compare && l === state.location ? ' on' : ''}" data-loc="${esc(l)}"
          style="--loc-color:${colorFor(l)}"><i class="dot"></i>${esc(l)}</button>`
@@ -193,11 +210,18 @@ function renderChips(locs) {
     b.addEventListener('click', () => {
       state.compare = false;
       state.location = b.dataset.loc;
-      try { localStorage.setItem(LAST_LOCATION, state.location); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(LAST_LOCATION, state.location);
+        localStorage.setItem(LAST_MODE, 'one');
+      } catch { /* ignore */ }
       loadHistory();
     }));
   $('loc-chips').querySelectorAll('[data-all]').forEach((b) =>
-    b.addEventListener('click', () => { state.compare = true; loadHistory(); }));
+    b.addEventListener('click', () => {
+      state.compare = true;
+      try { localStorage.setItem(LAST_MODE, 'all'); } catch { /* ignore */ }
+      loadHistory();
+    }));
   $('loc-chips').querySelectorAll('[data-hum]').forEach((b) =>
     b.addEventListener('click', () => { state.showHumidity = !state.showHumidity; drawChart(); renderChips(locs); }));
   $('range-chips').querySelectorAll('[data-h]').forEach((b) =>
@@ -206,13 +230,16 @@ function renderChips(locs) {
 
 /* ---------------------------------------------------------------- chart -- */
 async function loadHistory() {
+  // Compare mode is driven by the location *list*, not by a chosen location,
+  // so it is reached before the guard below -- which would otherwise blank the
+  // default view on a first run, before any location has been picked.
+  if (state.compare) { await loadCompare(); return; }
+
   // loadNow picks a default location on first run. Fetching history without
   // one returns every location interleaved by timestamp, which drawn as a
   // single path looks like a fault in the sensor rather than in the chart.
   if (!state.location) await loadNow();
   if (!state.location) { state.points = []; drawChart(); return; }
-
-  if (state.compare) { await loadCompare(); return; }
 
   renderChips([state.location]);
   try {
