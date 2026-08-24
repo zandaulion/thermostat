@@ -136,6 +136,9 @@ h2{font-size:.76rem;margin:0;text-transform:uppercase;letter-spacing:.08em;
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:.78rem;color:var(--muted)}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:5px;
   vertical-align:middle}
+/* Heating is a shaded region, not a line. Now that a property's line can also
+   be orange, shape rather than hue is what separates the two in the legend. */
+.legend i.band{height:12px;border-radius:3px}
 .empty{color:var(--muted);font-size:.85rem;padding:20px 2px;text-align:center}
 
 /* --- install ----------------------------------------------------------- */
