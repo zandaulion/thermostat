@@ -33,7 +33,13 @@ const RANGES = [
 const state = {
   location: null, hours: 24, points: [], thresholds: {},
   showHumidity: false, sub: null,
+  // Compare mode: every location on one set of axes. `series` is
+  // [{location, points, color}], one entry per sensor.
+  compare: false, series: [],
 };
+
+const SERIES_COLORS = ['var(--s1)', 'var(--s2)', 'var(--s3)',
+                       'var(--s4)', 'var(--s5)', 'var(--s6)'];
 
 const fmtTime = (iso, long) => new Date(iso).toLocaleString('ro-RO',
   long ? { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
@@ -133,19 +139,29 @@ async function loadNow() {
 
 function renderChips(locs) {
   const uniq = [...new Set(locs)];
-  $('loc-chips').innerHTML = uniq.map((l) =>
-    `<button class="chip${l === state.location ? ' on' : ''}" data-loc="${esc(l)}">${esc(l)}</button>`
-  ).join('') + `<button class="chip${state.showHumidity ? ' on' : ''}" data-hum="1">umiditate</button>`;
+  // "toate" is a mode, not a place, so it sits first and is styled as the
+  // odd one out. Humidity is hidden while comparing: four humidity lines on a
+  // second scale is not a comparison, it is a mess.
+  $('loc-chips').innerHTML =
+    `<button class="chip mode${state.compare ? ' on' : ''}" data-all="1">toate</button>`
+    + uniq.map((l) =>
+      `<button class="chip${!state.compare && l === state.location ? ' on' : ''}" data-loc="${esc(l)}">${esc(l)}</button>`
+    ).join('')
+    + (state.compare ? ''
+       : `<button class="chip${state.showHumidity ? ' on' : ''}" data-hum="1">umiditate</button>`);
   $('range-chips').innerHTML = RANGES.map((r) =>
     `<button class="chip${r.h === state.hours ? ' on' : ''}" data-h="${r.h}">${r.label}</button>`
   ).join('');
 
   $('loc-chips').querySelectorAll('[data-loc]').forEach((b) =>
     b.addEventListener('click', () => {
+      state.compare = false;
       state.location = b.dataset.loc;
       try { localStorage.setItem(LAST_LOCATION, state.location); } catch { /* ignore */ }
       loadHistory();
     }));
+  $('loc-chips').querySelectorAll('[data-all]').forEach((b) =>
+    b.addEventListener('click', () => { state.compare = true; loadHistory(); }));
   $('loc-chips').querySelectorAll('[data-hum]').forEach((b) =>
     b.addEventListener('click', () => { state.showHumidity = !state.showHumidity; drawChart(); renderChips(locs); }));
   $('range-chips').querySelectorAll('[data-h]').forEach((b) =>
@@ -159,6 +175,9 @@ async function loadHistory() {
   // single path looks like a fault in the sensor rather than in the chart.
   if (!state.location) await loadNow();
   if (!state.location) { state.points = []; drawChart(); return; }
+
+  if (state.compare) { await loadCompare(); return; }
+
   renderChips([state.location]);
   try {
     const d = await api(`/api/history?location=${encodeURIComponent(state.location)}`
@@ -169,6 +188,34 @@ async function loadHistory() {
     if (ex instanceof ApiError && ex.status === 401) { showGate(''); return; }
   }
   await loadNow();          // refreshes the tiles and the location chips
+  drawChart();
+}
+
+/* One request per location rather than one unfiltered request for all of
+   them. /api/history downsamples to a fixed number of points *after*
+   filtering, so asking for everything at once would spend that budget on
+   whichever locations happen to interleave first and thin the rest
+   unevenly. Per-location keeps every series sampled the same way. */
+async function loadCompare() {
+  let locs = [];
+  try {
+    locs = (await api('/api/locations')).locations || [];
+  } catch (ex) {
+    if (ex instanceof ApiError && ex.status === 401) { showGate(''); return; }
+  }
+  const results = await Promise.all(locs.map(async (l) => {
+    try {
+      const d = await api(`/api/history?location=${encodeURIComponent(l)}`
+                        + `&hours=${state.hours}`);
+      return { location: l, points: (d.points || []).filter((p) => p.temperature != null) };
+    } catch {
+      return { location: l, points: [] };   // one dead sensor must not blank the chart
+    }
+  }));
+  state.series = results
+    .filter((r) => r.points.length)
+    .map((r, i) => ({ ...r, color: SERIES_COLORS[i % SERIES_COLORS.length] }));
+  await loadNow();
   drawChart();
 }
 
@@ -190,6 +237,7 @@ function chartGeometry(svg) {
 }
 
 function drawChart() {
+  if (state.compare) return drawCompareChart();
   const svg = $('chart');
   const { W, H, PAD, ticks, gridY } = chartGeometry(svg);
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -269,6 +317,106 @@ function drawChart() {
     + (hum ? `<span><i style="background:var(--hum)"></i>umiditate</span>` : '');
 
   attachCursor(svg, pts, xs, X, PAD, H);
+}
+
+/* Every location on one temperature axis.
+   Heat bands and the humidity line are deliberately absent: both belong to a
+   single sensor, and drawing four of either would say less than one does.
+   The axis is shared, which is the whole point -- the comparison is only
+   honest if the lines are measured against the same scale. */
+function drawCompareChart() {
+  const svg = $('chart');
+  const { W, H, PAD, ticks, gridY } = chartGeometry(svg);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('height', H);
+
+  const series = state.series.filter((s) => s.points.length);
+  if (!series.length) {
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle"
+      class="axis">Nicio măsurătoare în acest interval</text>`;
+    $('legend').innerHTML = '';
+    return;
+  }
+
+  const all = series.flatMap((s) => s.points);
+  const xsAll = all.map((p) => new Date(p.ts).getTime());
+  const tsAll = all.map((p) => p.temperature);
+  const x0 = Math.min(...xsAll), x1 = Math.max(...xsAll);
+  let y0 = Math.min(...tsAll), y1 = Math.max(...tsAll);
+  const padY = Math.max(0.5, (y1 - y0) * 0.12);
+  y0 -= padY; y1 += padY;
+
+  const X = (v) => PAD.l + ((v - x0) / (x1 - x0 || 1)) * (W - PAD.l - PAD.r);
+  const Y = (v) => H - PAD.b - ((v - y0) / (y1 - y0 || 1)) * (H - PAD.t - PAD.b);
+
+  const grid = [], labels = [];
+  for (let i = 0; i <= gridY; i++) {
+    const v = y0 + (i / gridY) * (y1 - y0), y = Y(v);
+    grid.push(`<line class="grid" x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W - PAD.r}" y2="${y.toFixed(1)}"/>`);
+    labels.push(`<text class="axis" x="4" y="${(y + 4).toFixed(1)}">${v.toFixed(1)}</text>`);
+  }
+  for (let i = 0; i <= ticks; i++) {
+    const t = x0 + (i / ticks) * (x1 - x0);
+    const anchor = i === 0 ? 'start' : i === ticks ? 'end' : 'middle';
+    labels.push(`<text class="axis" x="${X(t).toFixed(1)}" y="${H - 6}"
+      text-anchor="${anchor}">${esc(fmtTime(new Date(t).toISOString(), state.hours > 48))}</text>`);
+  }
+
+  const paths = series.map((s) => {
+    const d = s.points.map((p, i) =>
+      `${i ? 'L' : 'M'}${X(new Date(p.ts).getTime()).toFixed(1)},${Y(p.temperature).toFixed(1)}`
+    ).join('');
+    return `<path class="serie" stroke="${s.color}" d="${d}"/>`;
+  }).join('');
+
+  svg.innerHTML = grid.join('') + paths + labels.join('')
+    + `<line id="cursor" class="cursor" x1="0" y1="${PAD.t}" x2="0" y2="${H - PAD.b}" style="display:none"/>`;
+
+  $('legend').innerHTML = series.map((s) =>
+    `<span><i style="background:${s.color}"></i>${esc(s.location)}</span>`).join('');
+
+  attachCompareCursor(svg, series, X, PAD, H);
+}
+
+/* Reads every series at the dragged moment, so the readout answers "which is
+   warmer right now" rather than making you eyeball two lines. */
+function attachCompareCursor(svg, series, X, PAD, H) {
+  const cursor = svg.querySelector('#cursor');
+  const readout = $('readout');
+  const prepared = series.map((s) => ({
+    ...s, xs: s.points.map((p) => new Date(p.ts).getTime()),
+  }));
+  const at = (evt) => {
+    const r = svg.getBoundingClientRect();
+    const vb = svg.viewBox.baseVal;
+    const cx = ((evt.touches ? evt.touches[0].clientX : evt.clientX) - r.left)
+               / r.width * vb.width;
+    let stamp = null;
+    const reads = prepared.map((s) => {
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < s.xs.length; i++) {
+        const d = Math.abs(X(s.xs[i]) - cx);
+        if (d < bd) { bd = d; best = i; }
+      }
+      if (stamp === null || bd < stamp.d) stamp = { d: bd, x: X(s.xs[best]), ts: s.points[best].ts };
+      return { location: s.location, color: s.color, p: s.points[best] };
+    });
+    cursor.setAttribute('x1', stamp.x);
+    cursor.setAttribute('x2', stamp.x);
+    cursor.style.display = '';
+    readout.hidden = false;
+    // Warmest first: the ordering is the comparison.
+    reads.sort((a, b) => b.p.temperature - a.p.temperature);
+    readout.innerHTML = `${esc(fmtTime(stamp.ts, true))}<br>`
+      + reads.map((r) =>
+          `<span style="color:${r.color}">&#9632;</span> ${esc(r.location)} `
+          + `<b>${r.p.temperature.toFixed(1)}°</b>`).join('<br>');
+  };
+  const hide = () => { cursor.style.display = 'none'; readout.hidden = true; };
+  svg.onpointermove = at;
+  svg.onpointerdown = at;
+  svg.onpointerleave = hide;
+  svg.onpointerup = hide;
 }
 
 /* Drag anywhere on the chart to read the value at that moment. */
