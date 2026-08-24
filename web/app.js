@@ -36,10 +36,41 @@ const state = {
   // Compare mode: every location on one set of axes. `series` is
   // [{location, points, color}], one entry per sensor.
   compare: false, series: [],
+  locations: [],          // sorted, stable -- drives colorFor()
 };
 
 const SERIES_COLORS = ['var(--s1)', 'var(--s2)', 'var(--s3)',
                        'var(--s4)', 'var(--s5)', 'var(--s6)'];
+const KNOWN_LOCATIONS = 'th-locations';
+
+/* One colour per property, everywhere it appears -- tile, chip, chart line,
+   readout. The assignment is by position in the *sorted, complete* list of
+   locations rather than by whatever order a response happens to arrive in,
+   so a sensor going quiet does not silently re-colour the others.
+   Deliberately not a hash of the name: with six colours and four properties
+   a hash collides more often than not, and two properties sharing a colour
+   defeats the point of having them. */
+function colorFor(loc) {
+  const i = state.locations.indexOf(loc);
+  return i < 0 ? 'var(--muted)' : SERIES_COLORS[i % SERIES_COLORS.length];
+}
+
+/* The authoritative list includes locations with no current reading, which is
+   what keeps the mapping stable. Cached so the colours survive a cold start
+   offline, where /api/locations is unreachable but tiles still render. */
+async function ensureLocations(seed) {
+  if (!state.locations.length) {
+    try { state.locations = JSON.parse(localStorage.getItem(KNOWN_LOCATIONS)) || []; }
+    catch { /* private mode */ }
+  }
+  let fresh = null;
+  try { fresh = (await api('/api/locations')).locations; } catch { /* offline */ }
+  const merged = [...new Set([...(fresh || state.locations), ...(seed || [])])].sort();
+  if (merged.join('\u0000') !== state.locations.join('\u0000')) {
+    state.locations = merged;
+    try { localStorage.setItem(KNOWN_LOCATIONS, JSON.stringify(merged)); } catch { /* ignore */ }
+  }
+}
 
 const fmtTime = (iso, long) => new Date(iso).toLocaleString('ro-RO',
   long ? { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
@@ -93,6 +124,7 @@ async function loadNow() {
   state.thresholds = data.thresholds || {};
 
   const rows = data.readings || [];
+  await ensureLocations(rows.map((r) => r.location));
   $('cards').innerHTML = rows.length ? rows.map((r) => {
     const t = r.temperature;
     const heating = (r.status || '').toLowerCase() === 'on';
@@ -116,7 +148,10 @@ async function loadNow() {
     else if (r.stale) badges.push('<span class="badge stale">tace</span>');
     else if (heating) badges.push('<span class="badge heat">încălzire</span>');
 
-    return `<div class="tile${(r.stale || r.offline) ? ' stale' : ''}">
+    // The rail carries which property this is; the number keeps its own
+    // colour, which says how hot it is. Two different questions, two channels.
+    return `<div class="tile${(r.stale || r.offline) ? ' stale' : ''}"
+        style="--loc-color:${colorFor(r.location)}">
         ${badges.length ? `<div class="badges">${badges.join('')}</div>` : ''}
         <div class="loc">${esc(r.location)}</div>
         <p class="t ${tempClass(t)}">${t == null ? '—' : t.toFixed(1)}<small>°C</small></p>
@@ -145,7 +180,8 @@ function renderChips(locs) {
   $('loc-chips').innerHTML =
     `<button class="chip mode${state.compare ? ' on' : ''}" data-all="1">toate</button>`
     + uniq.map((l) =>
-      `<button class="chip${!state.compare && l === state.location ? ' on' : ''}" data-loc="${esc(l)}">${esc(l)}</button>`
+      `<button class="chip${!state.compare && l === state.location ? ' on' : ''}" data-loc="${esc(l)}"
+         style="--loc-color:${colorFor(l)}"><i class="dot"></i>${esc(l)}</button>`
     ).join('')
     + (state.compare ? ''
        : `<button class="chip${state.showHumidity ? ' on' : ''}" data-hum="1">umiditate</button>`);
@@ -197,13 +233,8 @@ async function loadHistory() {
    whichever locations happen to interleave first and thin the rest
    unevenly. Per-location keeps every series sampled the same way. */
 async function loadCompare() {
-  let locs = [];
-  try {
-    locs = (await api('/api/locations')).locations || [];
-  } catch (ex) {
-    if (ex instanceof ApiError && ex.status === 401) { showGate(''); return; }
-  }
-  const results = await Promise.all(locs.map(async (l) => {
+  await ensureLocations();
+  const results = await Promise.all(state.locations.map(async (l) => {
     try {
       const d = await api(`/api/history?location=${encodeURIComponent(l)}`
                         + `&hours=${state.hours}`);
@@ -214,7 +245,7 @@ async function loadCompare() {
   }));
   state.series = results
     .filter((r) => r.points.length)
-    .map((r, i) => ({ ...r, color: SERIES_COLORS[i % SERIES_COLORS.length] }));
+    .map((r) => ({ ...r, color: colorFor(r.location) }));
   await loadNow();
   drawChart();
 }
