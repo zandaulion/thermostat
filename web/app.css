@@ -83,8 +83,16 @@ h2{font-size:.76rem;margin:0;text-transform:uppercase;letter-spacing:.08em;
 .tile .meta{margin-top:6px;font-size:.8rem;color:var(--muted)}
 /* Colour is reserved for the two states that raise an alert. */
 .t.c-cold{color:var(--cold)} .t.c-ok{color:var(--ok)} .t.c-hot{color:var(--hot)}
-.badges{position:absolute;top:12px;right:12px;display:flex;gap:5px;
-  align-items:center;flex-wrap:wrap;justify-content:flex-end}
+/* The badge used to be absolutely positioned, which was fine while it read
+   "tace" and collided with nothing. "deconectat" is three times as wide and
+   ran straight through the location name. A row lets the two negotiate. */
+.tile-head{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:6px 8px;flex-wrap:wrap;min-height:1.1rem}
+.badges{display:flex;gap:5px;align-items:center;flex-wrap:wrap;
+  justify-content:flex-end;flex:0 0 auto}
+/* The place name never breaks mid-word -- "MANG / ALIA" is worse than a badge
+   on its own line, so the badge is what yields when the two do not fit. */
+.tile-head .loc{white-space:nowrap}
 .badge{font-size:.64rem;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;padding:2px 7px;border-radius:999px;
   border:1px solid currentColor;display:inline-flex;align-items:center;gap:4px}

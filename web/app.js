@@ -159,8 +159,10 @@ async function loadNow() {
     // colour, which says how hot it is. Two different questions, two channels.
     return `<div class="tile${(r.stale || r.offline) ? ' stale' : ''}"
         style="--loc-color:${colorFor(r.location)}">
-        ${badges.length ? `<div class="badges">${badges.join('')}</div>` : ''}
-        <div class="loc">${esc(r.location)}</div>
+        <div class="tile-head">
+          <div class="loc">${esc(r.location)}</div>
+          ${badges.length ? `<div class="badges">${badges.join('')}</div>` : ''}
+        </div>
         <p class="t ${tempClass(t)}">${t == null ? '—' : t.toFixed(1)}<small>°C</small></p>
         <div class="meta">${esc(bits.join(' · '))}</div>
       </div>`;
