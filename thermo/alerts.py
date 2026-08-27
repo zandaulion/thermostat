@@ -95,8 +95,25 @@ LIVENESS_KNOWN = {"online", "on", "off"}
 
 
 def sensor_age_minutes(row: dict, now: datetime) -> float | None:
-    """Age against the sensor's own clock, falling back to our write time."""
-    ts = row.get("reported_at") or row.get("ts")
+    """How long ago this reading was last confirmed.
+
+    For a device we poll and that the cloud says is reachable, that is our own
+    poll time: we asked, and this is what came back. `reported_at` cannot be
+    used for it. Tuya's per-device `update_time` tracks datapoint reports on
+    some devices and not on others -- the Home thermostat returns a changing
+    `temp_current` on every poll while its `update_time` sits six days in the
+    past, which showed a healthy sensor as "acum 6 zile".
+
+    When the cloud says the device is *offline*, `reported_at` becomes the
+    honest number and our poll time the misleading one: nothing was confirmed,
+    and what matters is how long ago the device was last heard from.
+
+    Sources that push to us are covered by the same rule from the other side.
+    They write no row when they go quiet, so their newest `ts` stops advancing
+    and its age grows on its own -- which is exactly what SILENT_MINUTES reads.
+    """
+    ts = row.get("reported_at") if is_offline(row) else row.get("ts")
+    ts = ts or row.get("ts")
     if not ts:
         return None
     return (now - datetime.fromisoformat(ts)).total_seconds() / 60

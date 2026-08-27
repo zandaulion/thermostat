@@ -241,8 +241,22 @@ legitimately goes hours between datapoints, so timing it out on
 - **no liveness information** (every push source) → fall back to the
   `ALERT_SILENT_MINUTES` timer, where arrival time really is report time.
 
-Rows carry two clocks to make this possible: `ts` is when we wrote the row,
-and `reported_at` is when the sensor itself last spoke.
+Rows carry two clocks: `ts` is when we wrote the row, and `reported_at` is
+Tuya's `update_time` for the device.
+
+**`reported_at` is not a reliable "last spoke" clock**, and the displayed age no
+longer comes from it while a device is reachable. Tuya refreshes `update_time`
+on datapoint reports for some devices and not others: the Home thermostat
+returns a changing `temp_current` on every poll while its `update_time` sits
+days in the past, which showed a healthy sensor as "acum 6 zile". So:
+
+* **device reachable** → age is our own poll time. We asked, and this is what
+  came back; that is the honest claim.
+* **device offline** → age is `reported_at`. Nothing was confirmed, and what
+  matters is how long ago it was last heard from.
+
+Push sources need no special case. They write no row when they go quiet, so
+their newest `ts` stops advancing and its age grows by itself.
 
 Tuya's free **IoT Core trial lasts one month** and cannot be re-subscribed on
 the same account; past it, their pricing is enterprise-scale. When it lapses
