@@ -11,3 +11,8 @@ __pycache__/
 # Device inventory: room names and cloud device ids, per-deployment.
 # Lives on the data volume; devices.example.json is the template.
 devices.json
+
+# Runtime measurements, device caches and scheduler output
+data/
+cron_log.txt
+*.log

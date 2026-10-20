@@ -5,6 +5,27 @@ several properties, and surfaces it three ways: a **progressive web app**
 with live readings, interactive charts and push alerts; a Discord bot; and a
 plain CSV.
 
+
+## Choose a setup
+
+This repository contains a logger/Discord bot and a separate web dashboard.
+Start with [Setup & Installation](#%EF%B8%8F-setup--installation) for the logger,
+or [Web app](#-web-app) for the PWA/API. They have different dependency files:
+`requirements.txt` and `requirements-web.txt`. Container builds install their
+own Python dependencies; use a virtual environment for a host-Python install.
+
+Use `devices.example.json` and `deploy/thermo.env.example` as configuration
+references. Populate them with your own device inventory and credentials outside
+Git. [Project overview](https://zandaulion.com/thermostat.html).
+
+### Data and backup
+
+Stop writers before copying the data directory and logger CSV to a private
+backup. Keep the matching private environment/device inventory separately.
+Device caches, live readings and scheduler output are runtime data, not example
+fixtures. A clean checkout does not include them. Restore your data before
+restarting a migrated installation.
+
 ## 🚀 Features
 - **Web app (PWA)**: current readings per location, interactive charts, and
   push notifications. See [Web app](#-web-app) below.
@@ -51,7 +72,7 @@ for it in this order, first hit wins:
 | 3 | `./devices.json` | a checkout run from the working tree |
 
 If none of them exists the fetchers raise rather than returning an empty
-inventory — see [Failure modes](#-failure-modes-worth-knowing) for why.
+inventory — see [Failure modes](#failure-modes-worth-knowing) for why.
 
 ### 3. Start the Application
 Build and start the containers using Docker Compose:
@@ -201,7 +222,7 @@ If you prefer to run commands manually through the container:
 - `data/`: (Volume) Stores your `temp_log.csv` and `temp_plot.png`.
 - `Dockerfile` & `docker-compose.yml`: Container configuration.
 
-## ⚠️ Failure modes worth knowing
+## Failure modes worth knowing
 
 A monitoring app that hides its own blindness is worse than none. Four ways
 this one used to do exactly that, all now fixed:
@@ -271,7 +292,8 @@ leaves them unset — which is most push sources.
 
 ## 🛡️ Security
 `.gitignore` keeps three things out of the repository: your credentials
-(`.env`), the collected data (`data/`), and your device inventory
+(`.env`), the collected data and runtime device caches (`data/`), scheduler logs
+(`cron_log.txt`, `*.log`), and your device inventory
 (`devices.json`). The inventory matters as much as the other two — it names
 your rooms and lists your cloud device ids. The ids are not usable on their
 own, since the cloud APIs also want the key and secret from `.env`, but they
@@ -279,3 +301,12 @@ describe your setup and there is no reason to publish them.
 
 ## 📜 License
 This project is for personal use and is not affiliated with Salus Controls.
+
+
+## Support and contributions
+
+Use this repository’s Issues for reproducible bugs and focused feature requests. Include the version, relevant runtime/browser, expected behavior and a minimal synthetic example. Remove credentials, personal records, device identifiers and deployment-specific values before sharing logs or screenshots.
+
+For integration changes, test with synthetic sensor responses and document which logger/bot/web path was exercised. Do not call real thermostats from automated tests.
+
+Keep changes focused and update the affected documentation. Security-sensitive reports should follow [SECURITY.md](SECURITY.md).
