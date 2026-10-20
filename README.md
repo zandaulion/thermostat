@@ -300,7 +300,13 @@ own, since the cloud APIs also want the key and secret from `.env`, but they
 describe your setup and there is no reason to publish them.
 
 ## 📜 License
-This project is for personal use and is not affiliated with Salus Controls.
+
+This project is licensed under the **GNU General Public License, version 3
+or (at your option) any later version** (`GPL-3.0-or-later`). See [LICENSE](LICENSE)
+for the complete license text. Third-party components retain their own licenses
+and notices.
+
+This project is not affiliated with Salus Controls.
 
 
 ## Support and contributions
