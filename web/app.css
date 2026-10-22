@@ -1,6 +1,6 @@
 :root {
   --bg:#f5f7fb; --surface:#fff; --border:#e3e7f0; --text:#131722; --muted:#5d6579;
-  --accent:#0284c7; --cold:#2563eb; --ok:#0f766e; --warm:#c2410c; --hot:#b91c1c;
+  --accent:#0369a1; --on-accent:#fff; --cold:#2563eb; --ok:#0f766e; --warm:#c2410c; --hot:#b91c1c;
   --heat:#f97316; --hum:#64748b;
   /* Categorical series palette for the all-locations chart. Okabe-Ito, chosen
      because the lines carry identity rather than magnitude: the semantic
@@ -14,7 +14,7 @@
 @media (prefers-color-scheme:dark){
   :root{
     --bg:#0b1020; --surface:#151b2e; --border:#26304a; --text:#e9edf8; --muted:#9aa4bf;
-    --accent:#38bdf8; --cold:#60a5fa; --ok:#5eead4; --warm:#fb923c; --hot:#fca5a5;
+    --accent:#38bdf8; --on-accent:#0b1020; --cold:#60a5fa; --ok:#5eead4; --warm:#fb923c; --hot:#fca5a5;
     --heat:#fb923c; --hum:#94a3b8;
     /* Same hues, lifted so they hold against a dark ground. */
     --s1:#5bb3e6; --s2:#ff9052; --s3:#3ddba4;
@@ -38,7 +38,7 @@ h2{font-size:.76rem;margin:0;text-transform:uppercase;letter-spacing:.08em;
   color:var(--muted);font-weight:650}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:15px;
   padding:16px;box-shadow:var(--shadow)}
-.btn{font:inherit;font-weight:650;color:#fff;background:var(--accent);border:0;
+.btn{font:inherit;font-weight:650;color:var(--on-accent);background:var(--accent);border:0;
   border-radius:11px;padding:11px 20px;cursor:pointer}
 .btn:hover{filter:brightness(1.08)}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
